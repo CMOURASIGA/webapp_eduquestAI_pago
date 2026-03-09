@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
-import { useGeminiConfig } from '../context/GeminiConfigContext';
+import { useGeminiConfig, AIProvider } from '../context/GeminiConfigContext';
 import { Button } from '../components/ui/Button';
-import { ShieldCheck, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { ShieldCheck, AlertCircle, CheckCircle2, XCircle, Cpu } from 'lucide-react';
 import { testOpenAIConnection } from '../services/openaiService';
 
 export const ConfigGeminiPage: React.FC = () => {
-  // Fix: useGeminiConfig returns AppContextType which includes appMode, setAppMode, selectedModel, and setSelectedModel
-  const { selectedModel, setSelectedModel } = useGeminiConfig();
+  const { selectedModel, setSelectedModel, aiProvider, setAiProvider } = useGeminiConfig();
   const [model, setModel] = useState(selectedModel);
+  const [provider, setProvider] = useState<AIProvider>(aiProvider);
   const [saved, setSaved] = useState(false);
   
   const [testingOpenAI, setTestingOpenAI] = useState(false);
@@ -16,9 +16,19 @@ export const ConfigGeminiPage: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    setAiProvider(provider);
     setSelectedModel(model);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleProviderChange = (newProvider: AIProvider) => {
+    setProvider(newProvider);
+    if (newProvider === 'openai') {
+      setModel('gpt-4o-mini');
+    } else {
+      setModel('gemini-3-flash-preview');
+    }
   };
 
   const handleTestOpenAI = async () => {
@@ -37,34 +47,75 @@ export const ConfigGeminiPage: React.FC = () => {
       </header>
 
       <form onSubmit={handleSave} className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 space-y-6">
-        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Google Gemini</h2>
-        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-4">
-          <AlertCircle className="text-indigo-600 shrink-0 mt-1" size={20} />
-          <div className="text-sm text-indigo-800">
-            <p className="font-bold mb-1">Configuração de IA</p>
-            <p>A chave de API é gerenciada automaticamente pelo sistema. Você pode selecionar qual modelo de inteligência artificial deseja utilizar para gerar as questões das provas.</p>
+        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Provedor de IA Principal</h2>
+        
+        <div className="space-y-2">
+          <label className="block text-sm font-bold text-slate-700">
+            Selecione a Inteligência Artificial
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => handleProviderChange('gemini')}
+              className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
+                provider === 'gemini' 
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                  : 'border-slate-200 hover:border-indigo-200 text-slate-600'
+              }`}
+            >
+              <Cpu size={24} className={provider === 'gemini' ? 'text-indigo-600' : 'text-slate-400'} />
+              <div className="text-left">
+                <p className="font-bold">Google Gemini</p>
+                <p className="text-xs opacity-80">Rápido e eficiente</p>
+              </div>
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => handleProviderChange('openai')}
+              className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
+                provider === 'openai' 
+                  ? 'border-emerald-600 bg-emerald-50 text-emerald-700' 
+                  : 'border-slate-200 hover:border-emerald-200 text-slate-600'
+              }`}
+            >
+              <Cpu size={24} className={provider === 'openai' ? 'text-emerald-600' : 'text-slate-400'} />
+              <div className="text-left">
+                <p className="font-bold">OpenAI (ChatGPT)</p>
+                <p className="text-xs opacity-80">Alta precisão</p>
+              </div>
+            </button>
           </div>
         </div>
 
-        {/* Note: API Key management UI has been removed to comply with instructions that the key must be obtained exclusively from process.env.API_KEY */}
-
-        <div className="space-y-2">
+        <div className="space-y-2 pt-4">
           <label className="block text-sm font-bold text-slate-700">
-            Modelo do Gemini
+            Modelo Específico ({provider === 'gemini' ? 'Gemini' : 'OpenAI'})
           </label>
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
           >
-            <option value="gemini-3-flash-preview">Gemini 3 Flash (Recomendado - Rápido)</option>
-            <option value="gemini-3-pro-preview">Gemini 3 Pro (Alta Qualidade)</option>
-            <option value="gemini-flash-latest">Gemini Flash Latest</option>
-            <option value="gemini-flash-lite-latest">Gemini Flash Lite</option>
+            {provider === 'gemini' ? (
+              <>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash (Recomendado - Rápido)</option>
+                <option value="gemini-3-pro-preview">Gemini 3 Pro (Alta Qualidade)</option>
+                <option value="gemini-flash-latest">Gemini Flash Latest</option>
+                <option value="gemini-flash-lite-latest">Gemini Flash Lite</option>
+              </>
+            ) : (
+              <>
+                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado - Rápido e Barato)</option>
+                <option value="gpt-4o">GPT-4o (Alta Qualidade)</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+              </>
+            )}
           </select>
         </div>
 
-        <div className="pt-4">
+        <div className="pt-4 border-t mt-6">
           <Button type="submit" className="w-full" variant={saved ? 'secondary' : 'primary'}>
             {saved ? <><ShieldCheck size={20} /> Configurações Salvas!</> : 'Salvar Configurações'}
           </Button>
@@ -72,13 +123,23 @@ export const ConfigGeminiPage: React.FC = () => {
       </form>
 
       <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 space-y-6">
-        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">OpenAI</h2>
+        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Status das Conexões</h2>
         
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-4">
-          <AlertCircle className="text-slate-600 shrink-0 mt-1" size={20} />
-          <div className="text-sm text-slate-700">
-            <p className="font-bold mb-1">Integração Backend</p>
-            <p>A chave da OpenAI deve ser configurada no servidor (backend) através da variável de ambiente <code>OPENAI_API_KEY</code>.</p>
+        <div className="space-y-4">
+          <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-4">
+            <AlertCircle className="text-indigo-600 shrink-0 mt-1" size={20} />
+            <div className="text-sm text-indigo-800">
+              <p className="font-bold mb-1">Google Gemini</p>
+              <p>A chave de API do Gemini é gerenciada automaticamente pelo sistema (variável <code>API_KEY</code>).</p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-4">
+            <AlertCircle className="text-slate-600 shrink-0 mt-1" size={20} />
+            <div className="text-sm text-slate-700">
+              <p className="font-bold mb-1">OpenAI</p>
+              <p>A chave da OpenAI deve ser configurada no servidor (backend) através da variável de ambiente <code>OPENAI_API_KEY</code>.</p>
+            </div>
           </div>
         </div>
 

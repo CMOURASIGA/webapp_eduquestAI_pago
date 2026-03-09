@@ -54,6 +54,48 @@ async function startServer() {
     }
   });
 
+  // OpenAI Generate Exam Endpoint
+  app.post("/api/openai/generate", async (req, res) => {
+    try {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(401).json({ error: "OPENAI_API_KEY não configurada nas variáveis de ambiente." });
+      }
+
+      const { modelName, prompt } = req.body;
+
+      if (!prompt) {
+        return res.status(400).json({ error: "O prompt é obrigatório." });
+      }
+
+      const openai = new OpenAI({ apiKey });
+      
+      const response = await openai.chat.completions.create({
+        model: modelName || "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+
+      res.json({ 
+        success: true, 
+        result: response.choices[0]?.message?.content 
+      });
+    } catch (error: any) {
+      console.error("Erro na API da OpenAI (Generate):", error);
+      
+      let errorMessage = "Erro ao gerar a prova com a OpenAI.";
+      if (error.status === 429) errorMessage = "Limite de uso atingido (429).";
+      if (error.status === 401) errorMessage = "Chave de API inválida (401).";
+      if (error.error?.code === "insufficient_quota") errorMessage = "Sem saldo ou billing não ativado (insufficient_quota).";
+      
+      res.status(error.status || 500).json({ 
+        error: errorMessage, 
+        details: error.message 
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

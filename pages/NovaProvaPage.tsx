@@ -6,13 +6,14 @@ import { serieLabels } from '../utils/seriesUtils';
 import { getSubjectsForSerie } from '../utils/subjectUtils';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { generateExamWithGemini } from '../services/geminiService';
+import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, BookOpen, Target, FileText, AlertTriangle } from 'lucide-react';
 
 export const NovaProvaPage: React.FC = () => {
-  const { selectedModel } = useGeminiConfig();
+  const { selectedModel, aiProvider } = useGeminiConfig();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +42,18 @@ export const NovaProvaPage: React.FC = () => {
     setError(null);
 
     try {
-      const generated = await generateExamWithGemini({
+      const params = {
         ...formData,
         conteudoBase: [formData.conteudoBase],
         modelName: selectedModel
-      });
+      };
+
+      let generated;
+      if (aiProvider === 'openai') {
+        generated = await generateExamWithOpenAI(params);
+      } else {
+        generated = await generateExamWithGemini(params);
+      }
 
       const newExam = {
         ...generated,
@@ -61,7 +69,7 @@ export const NovaProvaPage: React.FC = () => {
       navigate(`/provas/${newExam.id}`);
     } catch (err: any) {
       console.error(err);
-      setError("Ocorreu um erro ao gerar a prova. Verifique sua conexão ou tente um conteúdo base diferente.");
+      setError(`Ocorreu um erro ao gerar a prova com ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}. Verifique sua conexão ou tente um conteúdo base diferente. Detalhes: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +77,7 @@ export const NovaProvaPage: React.FC = () => {
 
   return (
     <div className="pb-12">
-      {isLoading && <LoadingOverlay message="O Gemini está elaborando 40 questões pedagógicas... Por favor, aguarde." />}
+      {isLoading && <LoadingOverlay message={`A IA (${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}) está elaborando 40 questões pedagógicas... Por favor, aguarde.`} />}
 
       <header className="mb-10 flex items-center justify-between">
         <div>
