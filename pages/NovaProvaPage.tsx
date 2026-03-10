@@ -77,12 +77,12 @@ export const NovaProvaPage: React.FC = () => {
 
   return (
     <div className="pb-12">
-      {isLoading && <LoadingOverlay message={`A IA (${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}) está elaborando 40 questões pedagógicas... Por favor, aguarde.`} />}
+      {isLoading && <LoadingOverlay message={`A IA (${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}) está elaborando as questões pedagógicas... Por favor, aguarde.`} />}
 
       <header className="mb-10 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black text-slate-800">Criar Material de Estudo</h1>
-          <p className="text-slate-500">Transforme conteúdo bruto em um simulado inteligente de 40 questões.</p>
+          <p className="text-slate-500">Transforme conteúdo bruto em um simulado inteligente de 10 questões.</p>
         </div>
         <div className="hidden md:flex p-3 rounded-2xl bg-indigo-100 text-indigo-600">
           <BrainCircuit size={32} />
@@ -192,7 +192,7 @@ export const NovaProvaPage: React.FC = () => {
               Gerar Prova com IA
             </Button>
             <p className="text-[10px] text-center text-slate-400 uppercase tracking-widest font-bold">
-              40 QUESTÕES • ESTILO ENEM • BNCC
+              10 QUESTÕES • ESTILO ENEM • BNCC
             </p>
           </section>
         </div>

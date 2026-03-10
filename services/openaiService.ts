@@ -46,7 +46,15 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       })
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type');
+    let data;
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error("Resposta não-JSON recebida:", text);
+      throw new Error(`O servidor retornou uma resposta inesperada (não-JSON). Isso geralmente acontece por timeout ou erro interno no Vercel. Detalhes: ${text.substring(0, 100)}...`);
+    }
 
     if (!response.ok) {
       throw new Error(data.error || data.details || 'Erro desconhecido ao gerar a prova com OpenAI.');

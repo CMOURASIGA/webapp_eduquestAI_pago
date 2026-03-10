@@ -26,7 +26,7 @@ ${conteudoBase.join('\n\n')}
 ---
 
 INSTRUÇÕES IMPORTANTES:
-1. Gere EXATAMENTE 40 questões de múltipla escolha.
+1. Gere EXATAMENTE 10 questões de múltipla escolha.
 2. Siga o estilo ENEM: enunciados contextualizados, interdisciplinares onde possível e foco em competências.
 3. Cada questão deve ter exatamente 5 alternativas (A, B, C, D, E).
 4. Apenas uma alternativa está correta.
