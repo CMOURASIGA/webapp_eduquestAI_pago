@@ -16,7 +16,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "lucide-react": "^0.562.0",
-    "openai": "^6.27.0",
+    "openai": "^4.85.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.11.0",

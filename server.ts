@@ -52,9 +52,11 @@ app.post("/api/openai/test", async (req, res) => {
 
 // OpenAI Generate Exam Endpoint
 app.post("/api/openai/generate", async (req, res) => {
+  console.log("Recebida requisição para /api/openai/generate");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
+      console.error("OPENAI_API_KEY não encontrada");
       return res.status(401).json({ error: "OPENAI_API_KEY não configurada nas variáveis de ambiente." });
     }
 
@@ -64,6 +66,7 @@ app.post("/api/openai/generate", async (req, res) => {
       return res.status(400).json({ error: "O prompt é obrigatório." });
     }
 
+    console.log(`Iniciando chamada OpenAI com modelo: ${modelName || "gpt-4o-mini"}`);
     const openai = new OpenAI({ apiKey });
     
     const response = await openai.chat.completions.create({
@@ -73,12 +76,13 @@ app.post("/api/openai/generate", async (req, res) => {
       temperature: 0.7,
     });
 
+    console.log("Resposta recebida da OpenAI com sucesso");
     res.json({ 
       success: true, 
       result: response.choices[0]?.message?.content 
     });
   } catch (error: any) {
-    console.error("Erro na API da OpenAI (Generate):", error);
+    console.error("Erro detalhado na API da OpenAI (Generate):", error);
     
     let errorMessage = "Erro ao gerar a prova com a OpenAI.";
     if (error.status === 429) errorMessage = "Limite de uso atingido (429).";
@@ -87,7 +91,8 @@ app.post("/api/openai/generate", async (req, res) => {
     
     res.status(error.status || 500).json({ 
       error: errorMessage, 
-      details: error.message 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
