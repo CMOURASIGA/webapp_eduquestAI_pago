@@ -32,8 +32,26 @@ INSTRUÇÕES IMPORTANTES:
 4. Apenas uma alternativa está correta.
 5. Para cada questão, escreva uma "explicacao" detalhada que ajude o aluno a aprender o conceito por trás da resposta correta e por que as outras estão erradas (orientação de estudo).
 6. Use linguagem e vocabulário adequados para a idade de ${age}.
-7. Retorne o resultado estritamente no formato JSON solicitado.
-8. Garanta que cada questão tenha um ID único.
+7. Retorne SOMENTE JSON válido. NÃO inclua texto antes ou depois do JSON.
+8. Use exatamente este formato de resposta:
+{
+  "questions": [
+    {
+      "id": "string",
+      "enunciado": "string",
+      "alternativas": [
+        { "id": "A", "texto": "string" },
+        { "id": "B", "texto": "string" },
+        { "id": "C", "texto": "string" },
+        { "id": "D", "texto": "string" },
+        { "id": "E", "texto": "string" }
+      ],
+      "alternativaCorretaId": "A",
+      "explicacao": "string"
+    }
+  ]
+}
+9. Garanta que cada questão tenha um ID único.
 
-Sua resposta deve ser um objeto JSON contendo uma lista de 'questions'.`;
+Sua resposta deve ser estritamente um objeto JSON contendo uma lista de 'questions'.`;
 };
