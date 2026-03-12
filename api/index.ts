@@ -1,14 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-let cachedApp: any;
+import { app } from './_app';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    if (!cachedApp) {
-      const mod = await import('../server');
-      cachedApp = mod.default;
-    }
-    return cachedApp(req, res);
+    return app(req, res);
   } catch (err: any) {
     console.error("Erro ao inicializar o Express/Vercel handler:", err);
     res.status(500).json({
