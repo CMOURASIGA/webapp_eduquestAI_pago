@@ -23,7 +23,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   const [showExplanation, setShowExplanation] = useState(false);
 
   const handleSelect = (altId: string) => {
-    if (mode === 'aluno' && !selectedAnswerId && onAnswer) {
+    if (!selectedAnswerId && onAnswer) {
       onAnswer(question.id, altId);
       setShowExplanation(true);
     }
