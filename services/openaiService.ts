@@ -1,6 +1,7 @@
 import { Exam, Question, SerieEscolar } from '../types/exam';
 import { buildExamGenerationPrompt } from '../utils/examGenerationPromptBuilder';
 import { extractJSON } from '../utils/parseAIResponse';
+import { validateExam } from '../utils/validateExam';
 
 export async function testOpenAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
@@ -126,10 +127,14 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       };
     });
 
-    return {
+    const examResult = {
       questions,
       createdAt: new Date().toISOString()
     };
+
+    validateExam(examResult as any);
+
+    return examResult;
   } catch (error: any) {
     console.error("Erro na chamada à OpenAI:", error);
     throw new Error(error.message || "Erro desconhecido ao gerar a prova.");
