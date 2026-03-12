@@ -1,5 +1,6 @@
 import { Exam, Question, SerieEscolar } from '../types/exam';
 import { buildExamGenerationPrompt } from '../utils/examGenerationPromptBuilder';
+import { extractJSON } from '../utils/parseAIResponse';
 
 export async function testOpenAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
@@ -72,7 +73,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
     }
 
-    const parsed = JSON.parse(jsonString);
+    const parsed = extractJSON(jsonString);
 
     const normalizeAlternativas = (alts: any): Question["alternativas"] => {
       if (Array.isArray(alts)) {
