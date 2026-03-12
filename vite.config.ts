@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // Garante que o process.env.API_KEY da Vercel seja injetado no código do navegador
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
-    'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY)
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   },
   build: {
     outDir: 'dist',
