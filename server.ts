@@ -9,7 +9,24 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.json());
+// Aumenta limite do body para permitir prompts maiores e evita 413 HTML
+app.use(express.json({ limit: "2mb" }));
+// Retorna erros de parsing em JSON estruturado
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({
+      error: "Payload muito grande",
+      details: "O conteúdo enviado excede o limite de 2MB. Envie um texto menor."
+    });
+  }
+  if (err instanceof SyntaxError) {
+    return res.status(400).json({
+      error: "JSON inválido",
+      details: err.message
+    });
+  }
+  return next(err);
+});
 
 // API routes FIRST
 app.get("/api/health", (req, res) => {
