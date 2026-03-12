@@ -33,6 +33,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// Health estendido: não expõe chaves, só indica se estão configuradas
+app.get("/api/health/full", (req, res) => {
+  res.json({
+    status: "ok",
+    openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
+    nodeEnv: process.env.NODE_ENV || "development",
+    vercel: Boolean(process.env.VERCEL)
+  });
+});
+
 // OpenAI Test Endpoint
 app.post("/api/openai/test", async (req, res) => {
   try {
@@ -112,6 +122,15 @@ app.post("/api/openai/generate", async (req, res) => {
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
+});
+
+// Fallback de erros não tratados
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Erro não tratado no Express:", err);
+  res.status(err?.status || 500).json({
+    error: "Erro interno no servidor.",
+    details: err?.message || "Unhandled error"
+  });
 });
 
 async function startServer() {
