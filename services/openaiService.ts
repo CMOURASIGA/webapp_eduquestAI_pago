@@ -73,11 +73,31 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
     }
 
     const parsed = JSON.parse(jsonString);
-    
+
+    const normalizeAlternativas = (alts: any): Question["alternativas"] => {
+      if (Array.isArray(alts)) {
+        return alts.map((alt: any, idx: number) => ({
+          id: alt.id || crypto.randomUUID(),
+          label: alt.label || String.fromCharCode(65 + idx),
+          texto: alt.texto || alt.text || ""
+        }));
+      }
+      if (alts && typeof alts === "object") {
+        return Object.entries(alts).map(([key, val]: any, idx: number) => ({
+          id: val?.id || crypto.randomUUID(),
+          label: val?.label || key || String.fromCharCode(65 + idx),
+          texto: val?.texto || val?.text || ""
+        }));
+      }
+      return [];
+    };
+
     return {
       questions: (parsed.questions as Question[]).map(q => ({
         ...q,
-        id: q.id || crypto.randomUUID()
+        id: q.id || crypto.randomUUID(),
+        alternativas: normalizeAlternativas((q as any).alternativas),
+        alternativaCorretaId: (q as any).alternativaCorretaId || (q as any).alternativa_correta_id || (q as any).corretaId,
       })),
       createdAt: new Date().toISOString()
     };
