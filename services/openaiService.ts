@@ -2,6 +2,8 @@ import { Exam, Question, SerieEscolar } from '../types/exam';
 import { buildExamGenerationPrompt } from '../utils/examGenerationPromptBuilder';
 import { extractJSON } from '../utils/parseAIResponse';
 import { validateExam } from '../utils/validateExam';
+import fs from 'fs';
+import path from 'path';
 
 function ensureUniqueIds(questions: Question[]) {
   questions.forEach((q, index) => {
@@ -54,7 +56,9 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       },
       body: JSON.stringify({
         modelName: params.modelName || 'gpt-4o-mini',
-        prompt: prompt
+        prompt: prompt,
+        disciplina: params.disciplina,
+        conteudoBase: params.conteudoBase
       })
     });
 

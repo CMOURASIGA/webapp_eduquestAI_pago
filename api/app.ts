@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -32,6 +34,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
+
+function appendLog(entry: any) {
+  try {
+    const logEntry = `[${new Date().toISOString()}] ${JSON.stringify(entry)}\n`;
+    const logPath = path.resolve(process.cwd(), "logs", "examGeneration.log");
+    fs.appendFileSync(logPath, logEntry, { encoding: "utf8" });
+  } catch (e) {
+    console.error("Falha ao gravar log de geração:", e);
+  }
+}
 
 // Health estendido: não expõe chaves, só indica se estão configuradas
 app.get("/api/health/full", (req, res) => {
@@ -87,7 +99,7 @@ app.post("/api/openai/generate", async (req, res) => {
       return res.status(401).json({ error: "OPENAI_API_KEY não configurada nas variáveis de ambiente." });
     }
 
-    const { modelName, prompt } = req.body;
+    const { modelName, prompt, disciplina, conteudoBase } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "O prompt é obrigatório." });
@@ -103,12 +115,24 @@ app.post("/api/openai/generate", async (req, res) => {
       temperature: 0.7,
     });
 
+    appendLog({
+      disciplina,
+      conteudoBase,
+      prompt,
+      response: response.choices[0]?.message?.content
+    });
+
     console.log("Resposta recebida da OpenAI com sucesso");
     res.json({ 
       success: true, 
       result: response.choices[0]?.message?.content 
     });
   } catch (error: any) {
+    appendLog({
+      error: true,
+      details: error?.message,
+      stack: error?.stack
+    });
     console.error("Erro detalhado na API da OpenAI (Generate):", error);
     
     let errorMessage = "Erro ao gerar a prova com a OpenAI.";
@@ -158,4 +182,3 @@ export async function startServer() {
     });
   }
 }
-
