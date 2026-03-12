@@ -8,6 +8,7 @@ import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { generateExamWithGemini } from '../services/geminiService';
 import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
+import { extractTextFromImage } from '../services/ocrService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, BookOpen, Target, FileText, AlertTriangle } from 'lucide-react';
@@ -16,6 +17,8 @@ export const NovaProvaPage: React.FC = () => {
   const { selectedModel, aiProvider } = useGeminiConfig();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -75,6 +78,21 @@ export const NovaProvaPage: React.FC = () => {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrError(null);
+    setIsExtracting(true);
+    try {
+      const text = await extractTextFromImage(file);
+      setFormData(prev => ({ ...prev, conteudoBase: text }));
+    } catch (err: any) {
+      setOcrError(err.message || "Não foi possível extrair o texto da imagem.");
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   return (
     <div className="pb-12">
       {isLoading && <LoadingOverlay message={`A IA (${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}) está elaborando as questões pedagógicas... Por favor, aguarde.`} />}
@@ -103,6 +121,13 @@ export const NovaProvaPage: React.FC = () => {
               <FileText className="text-emerald-500" size={20} />
               <h2 className="text-xl font-bold text-slate-800">Conteúdo Base</h2>
             </div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+              <p className="text-sm text-slate-500">Cole o texto ou envie uma imagem para extrair o conteúdo automaticamente.</p>
+              <label className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 cursor-pointer">
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageUpload} disabled={isExtracting || isLoading} />
+                <span className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">{isExtracting ? 'Extraindo...' : 'Upload de imagem'}</span>
+              </label>
+            </div>
             <textarea
               required
               value={formData.conteudoBase}
@@ -110,6 +135,9 @@ export const NovaProvaPage: React.FC = () => {
               className="flex-1 w-full min-h-[400px] p-6 rounded-2xl border-none bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none resize-none text-slate-700 font-serif leading-relaxed"
               placeholder="Cole aqui o texto, tópicos ou capítulos que deseja usar como referência para a geração das questões..."
             />
+            {ocrError && (
+              <p className="mt-2 text-sm text-red-600">{ocrError}</p>
+            )}
           </section>
         </div>
 

@@ -4,11 +4,25 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import multer from "multer";
+import { cleanExtractedText } from "../utils/cleanExtractedText";
 
 dotenv.config();
 
 export const app = express();
 const PORT = 3000;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    if (["image/jpeg", "image/png", "image/jpg"].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato de imagem não suportado. Use jpg, jpeg ou png."));
+    }
+  },
+});
 
 app.use(cors());
 // Aumenta limite do body para permitir prompts maiores e evita 413 HTML
@@ -164,6 +178,59 @@ app.post("/api/openai/generate", async (req, res) => {
       details: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  }
+});
+
+// OCR endpoint - extrai texto de imagem
+app.post("/api/extract-text-image", upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Nenhuma imagem enviada." });
+    }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(401).json({ error: "OPENAI_API_KEY não configurada para OCR." });
+    }
+
+    const buffer = req.file.buffer;
+    const base64 = buffer.toString("base64");
+    const openai = new OpenAI({ apiKey });
+
+    const visionResponse = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extraia todo o texto legível desta imagem. Responda somente com o texto." },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${req.file.mimetype};base64,${base64}`,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 500,
+      temperature: 0,
+    });
+
+    const rawText = visionResponse.choices[0]?.message?.content || "";
+    const cleaned = cleanExtractedText(rawText);
+
+    if (!cleaned) {
+      return res.status(400).json({ error: "Nenhum texto identificado na imagem." });
+    }
+
+    res.json({ text: cleaned });
+  } catch (error: any) {
+    console.error("Falha no OCR:", error);
+    let message = "Não foi possível extrair o texto da imagem.";
+    if (error?.message?.includes("File too large")) {
+      message = "Imagem excede o tamanho permitido (5MB).";
+    }
+    res.status(500).json({ error: message, details: error?.message });
   }
 });
 
