@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
-import { cleanExtractedText } from "../utils/cleanExtractedText";
+import { cleanExtractedText } from "../utils/cleanExtractedText.js";
 
 dotenv.config();
 
