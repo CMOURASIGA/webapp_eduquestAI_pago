@@ -1,9 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { app } from './_app';
+
+let cachedApp: any;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    return app(req, res);
+    if (!cachedApp) {
+      const mod = await import('./_app');
+      cachedApp = mod.app;
+      // In dev local (node server.ts) startServer já roda; na Vercel não precisa escutar porta
+    }
+    return cachedApp(req, res);
   } catch (err: any) {
     console.error("Erro ao inicializar o Express/Vercel handler:", err);
     res.status(500).json({
