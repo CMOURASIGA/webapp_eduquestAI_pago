@@ -15,6 +15,27 @@ function ensureUniqueIds(questions: Question[]) {
   });
 }
 
+function ensureOnTopic(questions: Question[], conteudoBase: string[]) {
+  const text = (conteudoBase || []).join(' ').toLowerCase();
+  const keywords = Array.from(
+    new Set(
+      text
+        .split(/[^a-zà-úÀ-Ú0-9]+/i)
+        .filter((w) => w && w.length >= 4)
+    )
+  ).slice(0, 30);
+
+  if (keywords.length === 0) return;
+
+  questions.forEach((q, idx) => {
+    const en = (q.enunciado || '').toLowerCase();
+    const hasKeyword = keywords.some((kw) => en.includes(kw));
+    if (!hasKeyword) {
+      throw new Error(`Questão ${idx + 1} parece fora do tema base (nenhuma palavra-chave do conteúdo encontrada no enunciado).`);
+    }
+  });
+}
+
 export async function testOpenAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const response = await fetch('/api/openai/test', {
@@ -146,6 +167,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       createdAt: new Date().toISOString()
     };
 
+    ensureOnTopic(examResult.questions as Question[], params.conteudoBase);
     ensureUniqueIds(examResult.questions as Question[]);
     validateExam(examResult as any);
 
