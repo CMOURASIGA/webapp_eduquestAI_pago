@@ -10,11 +10,12 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { serieLabels } from '../utils/seriesUtils';
 import { ArrowLeft, Send, CheckCircle2, RotateCcw, Printer, FileDown } from 'lucide-react';
+import { saveAnswers } from '../services/performanceService';
 
 export const ProvaDetalhePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { appMode } = useGeminiConfig();
+  const { appMode, userProfile } = useGeminiConfig();
   
   const [exam, setExam] = useState<Exam | null>(null);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
@@ -38,7 +39,7 @@ export const ProvaDetalhePage: React.FC = () => {
     setUserAnswers(prev => ({ ...prev, [questionId]: alternativeId }));
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (!exam) return;
 
     // Calcular o score antes de salvar
@@ -53,13 +54,33 @@ export const ProvaDetalhePage: React.FC = () => {
       lastScore: scorePercentage
     };
 
-    // Persistir no localStorage
-    storageService.saveExam(updatedExam);
-    
-    // Atualizar estado local para refletir a mudança
-    setExam(updatedExam);
-    setShowSummary(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      // Persistir no localStorage
+      storageService.saveExam(updatedExam);
+
+      // Enviar respostas para o backend (dashboard de rendimento)
+      const payload = {
+        userId: userProfile?.name || 'usuario',
+        examId: exam.id,
+        disciplina: exam.disciplina,
+        answers: exam.questions.map((q) => ({
+          questionId: q.id,
+          selectedAlternative: userAnswers[q.id],
+          correctAlternative: q.alternativaCorretaId,
+          isCorrect: userAnswers[q.id] === q.alternativaCorretaId,
+          createdAt: new Date().toISOString()
+        }))
+      };
+      await saveAnswers(payload);
+
+      // Atualizar estado local para refletir a mudança
+      setExam(updatedExam);
+      setShowSummary(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err: any) {
+      console.error("Falha ao registrar respostas:", err);
+      alert("As respostas foram salvas localmente, mas não foi possível registrar no servidor. Tente novamente mais tarde.");
+    }
   };
 
   const handleReset = () => {

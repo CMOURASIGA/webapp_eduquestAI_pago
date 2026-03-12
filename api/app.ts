@@ -45,6 +45,25 @@ function appendLog(entry: any) {
   }
 }
 
+const answersFile = path.resolve(process.cwd(), "logs", "studentAnswers.json");
+function readAnswers() {
+  try {
+    if (!fs.existsSync(answersFile)) return [];
+    const raw = fs.readFileSync(answersFile, "utf8");
+    return JSON.parse(raw || "[]");
+  } catch (e) {
+    console.error("Falha ao ler answers:", e);
+    return [];
+  }
+}
+function writeAnswers(data: any[]) {
+  try {
+    fs.writeFileSync(answersFile, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    console.error("Falha ao gravar answers:", e);
+  }
+}
+
 // Health estendido: não expõe chaves, só indica se estão configuradas
 app.get("/api/health/full", (req, res) => {
   res.json({
@@ -145,6 +164,85 @@ app.post("/api/openai/generate", async (req, res) => {
       details: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  }
+});
+
+// Persistência de respostas dos alunos
+app.post("/api/answers", (req, res) => {
+  try {
+    const body = req.body;
+    if (!body?.userId || !body?.examId || !Array.isArray(body?.answers)) {
+      return res.status(400).json({ error: "Payload inválido para respostas." });
+    }
+    const existing = readAnswers();
+    const records = body.answers.map((ans: any) => ({
+      ...ans,
+      userId: body.userId,
+      examId: body.examId,
+      disciplina: body.disciplina || ans.disciplina,
+      createdAt: ans.createdAt || new Date().toISOString()
+    }));
+    existing.push(...records);
+    writeAnswers(existing);
+    res.json({ success: true, saved: records.length });
+  } catch (e: any) {
+    console.error("Falha ao salvar respostas:", e);
+    res.status(500).json({ error: "Falha ao salvar respostas", details: e?.message });
+  }
+});
+
+function calculatePerformance(records: any[]) {
+  const byDiscipline: Record<string, { correct: number; total: number }> = {};
+  records.forEach((r) => {
+    if (!byDiscipline[r.disciplina]) byDiscipline[r.disciplina] = { correct: 0, total: 0 };
+    byDiscipline[r.disciplina].total += 1;
+    if (r.isCorrect) byDiscipline[r.disciplina].correct += 1;
+  });
+  const disciplines = Object.fromEntries(
+    Object.entries(byDiscipline).map(([disc, val]) => [
+      disc,
+      {
+        correct: val.correct,
+        total: val.total,
+        accuracy: val.total ? Math.round((val.correct / val.total) * 100) : 0,
+      },
+    ])
+  );
+  const totals = records.length;
+  const correctTotal = records.filter((r) => r.isCorrect).length;
+  const exams = Array.from(new Set(records.map((r) => r.examId))).length;
+  return {
+    disciplines,
+    totals: {
+      exams,
+      questions: totals,
+      accuracy: totals ? Math.round((correctTotal / totals) * 100) : 0,
+    },
+  };
+}
+
+// Desempenho por usuário
+app.get("/api/performance/user/:userId", (req, res) => {
+  try {
+    const all = readAnswers();
+    const userRecords = all.filter((r) => r.userId === req.params.userId);
+    const perf = calculatePerformance(userRecords);
+    res.json(perf);
+  } catch (e: any) {
+    console.error("Falha ao calcular desempenho do usuário:", e);
+    res.status(500).json({ error: "Falha ao calcular desempenho", details: e?.message });
+  }
+});
+
+// Resumo agregado (professor)
+app.get("/api/performance/summary", (req, res) => {
+  try {
+    const all = readAnswers();
+    const perf = calculatePerformance(all);
+    res.json(perf);
+  } catch (e: any) {
+    console.error("Falha ao calcular desempenho agregado:", e);
+    res.status(500).json({ error: "Falha ao calcular desempenho", details: e?.message });
   }
 });
 

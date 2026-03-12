@@ -7,6 +7,7 @@ import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { fetchUserPerformance, fetchSummaryPerformance, PerformanceResponse } from '../services/performanceService';
 import { 
   FilePlus, 
   BookOpen, 
@@ -20,15 +21,39 @@ import {
 } from 'lucide-react';
 import { serieLabels } from '../utils/seriesUtils';
 
+const classifyAccuracy = (acc: number) => {
+  if (acc <= 40) return { label: 'Precisa reforçar', color: 'text-red-600' };
+  if (acc <= 70) return { label: 'Em desenvolvimento', color: 'text-amber-600' };
+  return { label: 'Bom domínio', color: 'text-emerald-600' };
+};
+
 export const DashboardPage: React.FC = () => {
-  const { appMode, userName } = useGeminiConfig();
+  const { appMode, userName, userProfile } = useGeminiConfig();
   const [exams, setExams] = useState<Exam[]>([]);
+  const [performance, setPerformance] = useState<PerformanceResponse | null>(null);
+  const [summaryPerf, setSummaryPerf] = useState<PerformanceResponse | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     setExams(storageService.getExams().sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     ));
+    // carrega desempenho
+    const load = async () => {
+      try {
+        if (appMode === 'aluno' && userProfile?.name) {
+          const perf = await fetchUserPerformance(userProfile.name);
+          setPerformance(perf);
+        }
+        if (appMode === 'professor') {
+          const perf = await fetchSummaryPerformance();
+          setSummaryPerf(perf);
+        }
+      } catch (e) {
+        console.error("Falha ao carregar desempenho:", e);
+      }
+    };
+    load();
   }, []);
 
   const completedExams = useMemo(() => exams.filter(e => e.completed), [exams]);
@@ -222,6 +247,70 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {appMode === 'aluno' && performance && (
+        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-slate-800">Seu rendimento por disciplina</h2>
+            <Badge>{performance.totals.questions} questões</Badge>
+          </div>
+          <div className="space-y-3">
+            {Object.entries(performance.disciplines).map(([disc, val]) => {
+              const classification = classifyAccuracy(val.accuracy);
+              return (
+                <div key={disc} className="p-4 border border-slate-200 rounded-2xl">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-slate-800 capitalize">{disc}</span>
+                    <span className="text-sm font-black text-indigo-600">{val.accuracy}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2 mb-2">
+                    <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${val.accuracy}%` }} />
+                  </div>
+                  <div className="text-xs text-slate-500 flex justify-between">
+                    <span>{val.correct}/{val.total} acertos</span>
+                    <span className={classification.color}>{classification.label}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 text-sm text-slate-600">
+            Provas realizadas: {performance.totals.exams} • Questões respondidas: {performance.totals.questions} • Taxa geral de acerto: {performance.totals.accuracy}%
+          </div>
+        </section>
+      )}
+
+      {appMode === 'professor' && summaryPerf && (
+        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-slate-800">Desempenho da turma por disciplina</h2>
+            <Badge variant="info">{summaryPerf.totals.questions} respostas</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(summaryPerf.disciplines).map(([disc, val]) => {
+              const classification = classifyAccuracy(val.accuracy);
+              return (
+                <div key={disc} className="p-4 border border-slate-200 rounded-2xl">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-slate-800 capitalize">{disc}</span>
+                    <span className="text-sm font-black text-indigo-600">{val.accuracy}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2 mb-2">
+                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${val.accuracy}%` }} />
+                  </div>
+                  <div className="text-xs text-slate-500 flex justify-between">
+                    <span>{val.correct}/{val.total} acertos</span>
+                    <span className={classification.color}>{classification.label}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 text-sm text-slate-600">
+            Questões respondidas: {summaryPerf.totals.questions} • Taxa média de acerto: {summaryPerf.totals.accuracy}%
+          </div>
+        </section>
+      )}
     </div>
   );
 };
