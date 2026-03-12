@@ -5,9 +5,8 @@ let cachedApp: any;
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (!cachedApp) {
-      const mod = await import('./_app');
+      const mod = await import('./app.js');
       cachedApp = mod.app;
-      // In dev local (node server.ts) startServer já roda; na Vercel não precisa escutar porta
     }
     return cachedApp(req, res);
   } catch (err: any) {
