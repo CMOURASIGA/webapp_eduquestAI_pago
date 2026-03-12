@@ -104,32 +104,29 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       return [];
     };
 
+    const questions = (parsed.questions as Question[]).map((q, idx) => {
+      const alternativas = normalizeAlternativas((q as any).alternativas);
+
+      const alternativaCorretaId =
+        (q as any).alternativaCorretaId ||
+        (q as any).alternativa_correta_id ||
+        (q as any).corretaId;
+
+      // Validação mínima: enunciado, pelo menos 2 alternativas e gabarito
+      if (!q.enunciado || alternativas.length < 2 || !alternativaCorretaId) {
+        throw new Error(`A IA retornou uma questão incompleta (questão ${idx + 1}). Tente gerar novamente com um conteúdo base diferente ou modelo diferente.`);
+      }
+
+      return {
+        ...q,
+        id: q.id || crypto.randomUUID(),
+        alternativas,
+        alternativaCorretaId,
+      };
+    });
+
     return {
-      questions: (parsed.questions as Question[]).map((q, idx) => {
-        const alternativas = normalizeAlternativas((q as any).alternativas);
-        const filledAlternativas = alternativas.length
-          ? alternativas
-          : Array.from({ length: 5 }).map((_, i) => ({
-              id: crypto.randomUUID(),
-              label: String.fromCharCode(65 + i),
-              texto: `Alternativa ${String.fromCharCode(65 + i)}`
-            }));
-
-        const alternativaCorretaId =
-          (q as any).alternativaCorretaId ||
-          (q as any).alternativa_correta_id ||
-          (q as any).corretaId ||
-          filledAlternativas[0]?.id;
-
-        return {
-          ...q,
-          id: q.id || crypto.randomUUID(),
-          enunciado: q.enunciado || q["enunciado"] || `Questão ${idx + 1}: enunciado não retornado pela IA.`,
-          explicacao: q.explicacao || `Sem explicação retornada pela IA.`,
-          alternativas: filledAlternativas,
-          alternativaCorretaId,
-        };
-      }),
+      questions,
       createdAt: new Date().toISOString()
     };
   } catch (error: any) {
