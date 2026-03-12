@@ -52,6 +52,7 @@ INSTRUÇÕES IMPORTANTES:
   ]
 }
 9. Garanta que cada questão tenha um ID único.
+10. A explicação deve: (a) justificar claramente por que a alternativa correta é correta; (b) apontar por que cada alternativa incorreta está errada; (c) usar linguagem e exemplos adequados para a série escolar.
 
 Sua resposta deve ser estritamente um objeto JSON contendo uma lista de 'questions'.`;
 };
