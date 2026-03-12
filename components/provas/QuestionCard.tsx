@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Question, AppMode } from '../../types/exam';
 import { Badge } from '../ui/Badge';
@@ -21,7 +20,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   selectedAnswerId,
   isCorrect 
 }) => {
-  const [showExplanation, setShowExplanation] = useState(mode === 'professor');
+  const [showExplanation, setShowExplanation] = useState(false);
 
   const handleSelect = (altId: string) => {
     if (mode === 'aluno' && !selectedAnswerId && onAnswer) {
@@ -31,6 +30,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   };
 
   const isAnswered = !!selectedAnswerId;
+  const shouldShowExplanation = isAnswered || showExplanation;
 
   return (
     <div className={`p-6 bg-white rounded-xl shadow-sm border transition-all print:shadow-none print:border-slate-200 print:p-4 ${isAnswered ? 'border-slate-200' : 'border-transparent'}`}>
@@ -45,11 +45,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             </div>
           )}
         </div>
-        <div className="print:hidden">
-          {mode === 'professor' && (
-            <Badge variant="default">Gabarito Visível</Badge>
-          )}
-        </div>
+        <div className="print:hidden" />
       </div>
 
       <p className="text-slate-800 font-medium text-lg leading-relaxed mb-6 print:text-base print:mb-4">
@@ -63,10 +59,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           
           let stateStyles = "border-slate-200 hover:border-indigo-300 bg-slate-50";
           
-          // Estilo especial para impressão quando for o modo professor (mostrar gabarito)
-          if (mode === 'professor' && isRightAnswer) {
-            stateStyles = "border-emerald-500 bg-emerald-50 text-emerald-800 print:bg-slate-100 print:border-slate-800 font-bold";
-          } else if (isAnswered) {
+          if (isAnswered) {
             if (isRightAnswer) stateStyles = "border-emerald-500 bg-emerald-50 text-emerald-800 print:bg-slate-100";
             else if (isSelected) stateStyles = "border-red-500 bg-red-50 text-red-800";
             else stateStyles = "border-slate-100 opacity-50 bg-slate-50 print:opacity-100";
@@ -79,7 +72,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               onClick={() => handleSelect(alt.id)}
               className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3 print:p-2 print:text-sm ${stateStyles}`}
             >
-              <span className={`font-bold mt-0.5 ${isRightAnswer && (isAnswered || mode === 'professor') ? 'text-emerald-600 print:text-slate-900' : isSelected && !isRightAnswer ? 'text-red-600' : 'text-slate-400'}`}>
+              <span className={`font-bold mt-0.5 ${isRightAnswer && isAnswered ? 'text-emerald-600 print:text-slate-900' : isSelected && !isRightAnswer ? 'text-red-600' : 'text-slate-400'}`}>
                 {alt.label})
               </span>
               <span className="flex-1">{alt.texto}</span>
@@ -92,7 +85,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         })}
       </div>
 
-      {(showExplanation || mode === 'professor') && (
+      {shouldShowExplanation && (
         <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-4 print:bg-white print:border-slate-200 print:p-3">
           <div className="flex items-center gap-2 mb-2 text-indigo-700 font-bold print:text-slate-900 print:text-xs">
             <Info size={18} className="print:hidden" />
