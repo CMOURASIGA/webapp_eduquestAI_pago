@@ -115,8 +115,11 @@ app.post("/api/openai/generate", async (req, res) => {
 });
 
 async function startServer() {
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const isVercel = Boolean(process.env.VERCEL);
+  const isProduction = process.env.NODE_ENV === "production" || isVercel;
+
+  // Vite middleware apenas no dev local
+  if (!isProduction) {
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
@@ -130,7 +133,7 @@ async function startServer() {
   }
 
   // Only listen if not running as a serverless function
-  if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  if (!isVercel) {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
