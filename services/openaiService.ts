@@ -3,6 +3,16 @@ import { buildExamGenerationPrompt } from '../utils/examGenerationPromptBuilder'
 import { extractJSON } from '../utils/parseAIResponse';
 import { validateExam } from '../utils/validateExam';
 
+function ensureUniqueIds(questions: Question[]) {
+  questions.forEach((q, index) => {
+    q.id = q.id || `q${index}`;
+    q.alternativas = q.alternativas.map((alt, altIdx) => ({
+      ...alt,
+      id: alt.id || String.fromCharCode(65 + altIdx)
+    }));
+  });
+}
+
 export async function testOpenAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const response = await fetch('/api/openai/test', {
@@ -132,6 +142,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       createdAt: new Date().toISOString()
     };
 
+    ensureUniqueIds(examResult.questions as Question[]);
     validateExam(examResult as any);
 
     return examResult;
