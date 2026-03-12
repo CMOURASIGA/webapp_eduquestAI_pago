@@ -32,6 +32,7 @@ INSTRUÇÕES IMPORTANTES:
 4. Apenas uma alternativa está correta.
 5. Para cada questão, escreva uma "explicacao" detalhada que ajude o aluno a aprender o conceito por trás da resposta correta e por que as outras estão erradas (orientação de estudo).
 6. Use linguagem e vocabulário adequados para a idade de ${age}.
+7. Ajuste o nível de dificuldade conforme pedido: "baixa" = perguntas diretas e objetivas; "media" = foco em interpretação de contexto; "alta" = raciocínio e aplicação do conhecimento em situações mais complexas.
 7. Retorne SOMENTE JSON válido. NÃO inclua texto antes ou depois do JSON.
 8. Use exatamente este formato de resposta:
 {
