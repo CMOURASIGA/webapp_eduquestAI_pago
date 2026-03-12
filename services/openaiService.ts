@@ -31,7 +31,7 @@ function ensureOnTopic(questions: Question[], conteudoBase: string[]) {
     const en = (q.enunciado || '').toLowerCase();
     const hasKeyword = keywords.some((kw) => en.includes(kw));
     if (!hasKeyword) {
-      throw new Error(`Questão ${idx + 1} parece fora do tema base (nenhuma palavra-chave do conteúdo encontrada no enunciado).`);
+      console.warn(`Questão ${idx + 1} pode não mencionar diretamente o conteúdo base (sem palavra-chave detectada).`);
     }
   });
 }
@@ -173,7 +173,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
 
     return examResult;
   } catch (error: any) {
-    console.error("Erro na chamada à OpenAI:", error);
+    console.error("Falha na validação da prova gerada:", error);
     throw new Error(error.message || "Erro desconhecido ao gerar a prova.");
   }
 }
