@@ -76,29 +76,60 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
 
     const normalizeAlternativas = (alts: any): Question["alternativas"] => {
       if (Array.isArray(alts)) {
-        return alts.map((alt: any, idx: number) => ({
-          id: alt.id || crypto.randomUUID(),
-          label: alt.label || String.fromCharCode(65 + idx),
-          texto: alt.texto || alt.text || ""
-        }));
+        return alts.map((alt: any, idx: number) => {
+          const texto =
+            typeof alt === "string"
+              ? alt
+              : alt?.texto || alt?.text || "";
+          return {
+            id: (alt as any)?.id || crypto.randomUUID(),
+            label: (alt as any)?.label || String.fromCharCode(65 + idx),
+            texto
+          };
+        });
       }
       if (alts && typeof alts === "object") {
-        return Object.entries(alts).map(([key, val]: any, idx: number) => ({
-          id: val?.id || crypto.randomUUID(),
-          label: val?.label || key || String.fromCharCode(65 + idx),
-          texto: val?.texto || val?.text || ""
-        }));
+        return Object.entries(alts).map(([key, val]: any, idx: number) => {
+          const texto =
+            typeof val === "string"
+              ? val
+              : val?.texto || val?.text || "";
+          return {
+            id: val?.id || crypto.randomUUID(),
+            label: val?.label || key || String.fromCharCode(65 + idx),
+            texto
+          };
+        });
       }
       return [];
     };
 
     return {
-      questions: (parsed.questions as Question[]).map(q => ({
-        ...q,
-        id: q.id || crypto.randomUUID(),
-        alternativas: normalizeAlternativas((q as any).alternativas),
-        alternativaCorretaId: (q as any).alternativaCorretaId || (q as any).alternativa_correta_id || (q as any).corretaId,
-      })),
+      questions: (parsed.questions as Question[]).map((q, idx) => {
+        const alternativas = normalizeAlternativas((q as any).alternativas);
+        const filledAlternativas = alternativas.length
+          ? alternativas
+          : Array.from({ length: 5 }).map((_, i) => ({
+              id: crypto.randomUUID(),
+              label: String.fromCharCode(65 + i),
+              texto: `Alternativa ${String.fromCharCode(65 + i)}`
+            }));
+
+        const alternativaCorretaId =
+          (q as any).alternativaCorretaId ||
+          (q as any).alternativa_correta_id ||
+          (q as any).corretaId ||
+          filledAlternativas[0]?.id;
+
+        return {
+          ...q,
+          id: q.id || crypto.randomUUID(),
+          enunciado: q.enunciado || q["enunciado"] || `Questão ${idx + 1}: enunciado não retornado pela IA.`,
+          explicacao: q.explicacao || `Sem explicação retornada pela IA.`,
+          alternativas: filledAlternativas,
+          alternativaCorretaId,
+        };
+      }),
       createdAt: new Date().toISOString()
     };
   } catch (error: any) {
