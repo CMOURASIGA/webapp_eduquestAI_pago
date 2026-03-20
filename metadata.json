@@ -1,0 +1,5 @@
+{
+  "name": "EduQuest IA - Gerador de Provas de Estudo",
+  "description": "Uma plataforma educacional que utiliza a IA do Gemini para gerar provas de estudo personalizadas com 40 questões, explicações detalhadas e feedback instantâneo para alunos.",
+  "requestFramePermissions": []
+}
