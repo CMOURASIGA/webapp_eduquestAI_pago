@@ -8,12 +8,19 @@ interface PromptParams {
   objetivo: string;
   conteudoBase: string[];
   nivelDificuldade: "baixa" | "media" | "alta";
+  // Opcional para geração em lotes: quantas questões gerar e a partir de qual índice.
+  questionsCount?: number;
+  questionOffset?: number;
 }
 
 export const buildExamGenerationPrompt = (params: PromptParams): string => {
   const { serie, disciplina, objetivo, conteudoBase, nivelDificuldade } = params;
   const label = serieLabels[serie];
   const age = getAgeRange(serie);
+  const questionsToGenerate = params.questionsCount ?? QUESTIONS_PER_EXAM;
+  const questionOffset = params.questionOffset ?? 0;
+  const startNumber = questionOffset + 1;
+  const endNumber = questionOffset + questionsToGenerate;
 
   return `Aja como um professor especialista brasileiro criando uma prova de ESTUDO para alunos do ${label} (faixa etária aproximada: ${age}).
 A disciplina é "${disciplina}".
@@ -26,7 +33,8 @@ ${conteudoBase.join('\n\n')}
 ---
 
 INSTRUÇÕES IMPORTANTES:
-1. Gere EXATAMENTE ${QUESTIONS_PER_EXAM} questões de múltipla escolha.
+1. Gere EXATAMENTE ${questionsToGenerate} questões de múltipla escolha.
+1.1. Numere e identifique este lote de questões de ${startNumber} até ${endNumber} (ex.: q${startNumber}, q${startNumber + 1}, ...). Evite repetir questões já criadas em outros lotes.
 2. Siga o estilo ENEM: enunciados contextualizados, interdisciplinares onde possível e foco em competências.
 3. Cada questão deve ter exatamente 5 alternativas (A, B, C, D, E).
 4. Apenas uma alternativa está correta.
