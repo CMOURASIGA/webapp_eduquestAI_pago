@@ -165,15 +165,18 @@ interface GenerateParams {
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {
   try {
     const totalQuestions = QUESTIONS_PER_EXAM;
-    const batchSize = totalQuestions > 20 ? 20 : totalQuestions;
+    // Lotes menores para reduzir tempo de cada chamada (Vercel timeout 60s)
+    const batchSize = Math.min(8, Math.max(5, Math.ceil(totalQuestions / 5)));
     const batches: { offset: number; count: number }[] = [];
     for (let offset = 0; offset < totalQuestions; offset += batchSize) {
       batches.push({ offset, count: Math.min(batchSize, totalQuestions - offset) });
     }
 
-    // Executa os lotes em paralelo para evitar estouro de timeout na função serverless
-    const batchResults = await Promise.all(batches.map(b => callOpenAIBatch(params, b.offset, b.count)));
-    const allQuestions = batchResults.flat();
+    const allQuestions: Question[] = [];
+    for (const b of batches) {
+      const questions = await callOpenAIBatch(params, b.offset, b.count);
+      allQuestions.push(...questions);
+    }
 
     const examResult = {
       questions: allQuestions,
