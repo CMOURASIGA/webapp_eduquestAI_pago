@@ -135,7 +135,7 @@ export const ConfigGeminiPage: React.FC = () => {
             <KeyRound size={18} /> Chave da IA (Gemini ou OpenAI)
           </label>
           <p className="text-xs text-slate-500">
-            A chave padrao vem da variavel do Vercel <code>API_KEY</code> (Gemini) ou <code>OPENAI_API_KEY</code> (OpenAI). Se nao houver uma chave no ambiente, informe abaixo para habilitar o uso da IA.
+            Informe a sua chave de uso de IA para o sistema funcionar.
           </p>
 
           <input
