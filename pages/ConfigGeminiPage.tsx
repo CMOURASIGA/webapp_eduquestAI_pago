@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+Ôªøimport React, { useState } from 'react';
 import { useGeminiConfig, AIProvider } from '../context/GeminiConfigContext';
 import { Button } from '../components/ui/Button';
 import { ShieldCheck, AlertCircle, CheckCircle2, XCircle, Cpu, KeyRound } from 'lucide-react';
@@ -13,8 +13,6 @@ export const ConfigGeminiPage: React.FC = () => {
     customApiKey,
     setCustomApiKey,
     canUseCustomApiKey,
-    activeApiKey,
-    apiKeySource,
     userProfile
   } = useGeminiConfig();
 
@@ -59,8 +57,8 @@ export const ConfigGeminiPage: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto py-8 space-y-8">
       <header>
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">Configura√ß√µes de IA</h1>
-        <p className="text-slate-500">Configure sua integra√ß√£o com as APIs do Google Gemini e OpenAI.</p>
+        <h1 className="text-3xl font-bold text-slate-800 mb-2">Configuracoes de IA</h1>
+        <p className="text-slate-500">Configure sua integracao com Google Gemini e OpenAI.</p>
       </header>
 
       <form onSubmit={handleSave} className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 space-y-6">
@@ -68,7 +66,7 @@ export const ConfigGeminiPage: React.FC = () => {
         
         <div className="space-y-2">
           <label className="block text-sm font-bold text-slate-700">
-            Selecione a Intelig√™ncia Artificial
+            Selecione a Inteligencia Artificial
           </label>
           <div className="grid grid-cols-2 gap-4">
             <button
@@ -83,7 +81,7 @@ export const ConfigGeminiPage: React.FC = () => {
               <Cpu size={24} className={provider === 'gemini' ? 'text-indigo-600' : 'text-slate-400'} />
               <div className="text-left">
                 <p className="font-bold">Google Gemini</p>
-                <p className="text-xs opacity-80">R√°pido e eficiente</p>
+                <p className="text-xs opacity-80">Rapido e eficiente</p>
               </div>
             </button>
             
@@ -99,7 +97,7 @@ export const ConfigGeminiPage: React.FC = () => {
               <Cpu size={24} className={provider === 'openai' ? 'text-emerald-600' : 'text-slate-400'} />
               <div className="text-left">
                 <p className="font-bold">OpenAI (ChatGPT)</p>
-                <p className="text-xs opacity-80">Alta precis√£o</p>
+                <p className="text-xs opacity-80">Alta precisao</p>
               </div>
             </button>
           </div>
@@ -107,7 +105,7 @@ export const ConfigGeminiPage: React.FC = () => {
 
         <div className="space-y-2 pt-4">
           <label className="block text-sm font-bold text-slate-700">
-            Modelo Espec√≠fico ({provider === 'gemini' ? 'Gemini' : 'OpenAI'})
+            Modelo Especifico ({provider === 'gemini' ? 'Gemini' : 'OpenAI'})
           </label>
           <select
             value={model}
@@ -116,14 +114,14 @@ export const ConfigGeminiPage: React.FC = () => {
           >
             {provider === 'gemini' ? (
               <>
-                <option value="gemini-3-flash-preview">Gemini 3 Flash (Recomendado - R√°pido)</option>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash (Recomendado - Rapido)</option>
                 <option value="gemini-3-pro-preview">Gemini 3 Pro (Alta Qualidade)</option>
                 <option value="gemini-flash-latest">Gemini Flash Latest</option>
                 <option value="gemini-flash-lite-latest">Gemini Flash Lite</option>
               </>
             ) : (
               <>
-                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado - R√°pido e Barato)</option>
+                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado - Rapido e Barato)</option>
                 <option value="gpt-4o">GPT-4o (Alta Qualidade)</option>
                 <option value="gpt-4-turbo">GPT-4 Turbo</option>
                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
@@ -137,7 +135,7 @@ export const ConfigGeminiPage: React.FC = () => {
             <KeyRound size={18} /> Chave do Gemini (sob demanda)
           </label>
           <p className="text-xs text-slate-500">
-            A chave padr„o vem da vari·vel do Vercel <code>API_KEY</code>. Se n„o houver uma chave vinculada no ambiente, informe abaixo para habilitar o uso da IA. Depois de vincular, n„o È necess·rio repetir em sessıes futuras (exceto se mudar o dispositivo/local de uso).
+            A chave padrao vem da variavel do Vercel <code>API_KEY</code>. Se nao houver uma chave no ambiente, informe abaixo para habilitar o uso da IA.
           </p>
 
           <input
@@ -148,43 +146,24 @@ export const ConfigGeminiPage: React.FC = () => {
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
             placeholder="Cole aqui a chave do Gemini"
           />
-
-          <div className="text-xs text-slate-500">
-            {canUseCustomApiKey ? (
-              <span className="text-emerald-700 font-medium">
-                VocÍ est· logado como {userProfile?.role === 'aluno' ? 'aluno' : 'professor'} {userProfile?.name}. Esta chave ser· usada nas prÛximas chamadas.
-              </span>
-            ) : (
-              <span className="text-slate-500">
-                A ediÁ„o da chave customizada fica disponÌvel apenas para perfis autorizados. Se vocÍ precisar informar a chave e o campo estiver bloqueado, entre em contato com o respons·vel pelo acesso.
-              </span>
-            )}
-          </div>
-
-          <div className="text-xs text-slate-500">
-            Fonte ativa: {apiKeySource === 'custom' ? 'Chave customizada' : apiKeySource === 'env' ? 'Vari·vel API_KEY (Vercel)' : 'Nenhuma chave encontrada'}.
-            {apiKeySource === 'custom' && (
-              <span className="text-emerald-700 font-semibold"> A chave customizada est· habilitada para este usu√°rio.</span>
-            )}
-          </div>
         </div>
 
         <div className="pt-4 border-t mt-6">
           <Button type="submit" className="w-full" variant={saved ? 'secondary' : 'primary'}>
-            {saved ? <><ShieldCheck size={20} /> Configura√ß√µes Salvas!</> : 'Salvar Configura√ß√µes'}
+            {saved ? <><ShieldCheck size={20} /> Configuracoes Salvas!</> : 'Salvar Configuracoes'}
           </Button>
         </div>
       </form>
 
       <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 space-y-6">
-        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Status das Conex√µes</h2>
+        <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Status das Conexoes</h2>
         
         <div className="space-y-4">
           <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-4">
             <AlertCircle className="text-indigo-600 shrink-0 mt-1" size={20} />
             <div className="text-sm text-indigo-800">
               <p className="font-bold mb-1">Google Gemini</p>
-              <p>A chave de API do Gemini √© gerenciada automaticamente pelo sistema (vari√°vel <code>API_KEY</code>).</p>
+              <p>A chave de API do Gemini e carregada pela variavel <code>API_KEY</code> no deploy.</p>
             </div>
           </div>
 
@@ -192,7 +171,7 @@ export const ConfigGeminiPage: React.FC = () => {
             <AlertCircle className="text-slate-600 shrink-0 mt-1" size={20} />
             <div className="text-sm text-slate-700">
               <p className="font-bold mb-1">OpenAI</p>
-              <p>A chave da OpenAI deve ser configurada no servidor (backend) atrav√©s da vari√°vel de ambiente <code>OPENAI_API_KEY</code>.</p>
+              <p>A chave da OpenAI deve ser configurada no backend via <code>OPENAI_API_KEY</code>.</p>
             </div>
           </div>
         </div>
@@ -205,7 +184,7 @@ export const ConfigGeminiPage: React.FC = () => {
             className="w-full"
             variant="secondary"
           >
-            {testingOpenAI ? 'Testando conex√£o...' : 'Testar Conex√£o com OpenAI'}
+            {testingOpenAI ? 'Testando conexao...' : 'Testar Conexao com OpenAI'}
           </Button>
         </div>
 
@@ -213,7 +192,7 @@ export const ConfigGeminiPage: React.FC = () => {
           <div className={`p-4 rounded-xl flex items-start gap-3 ${openAIResult.success ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
             {openAIResult.success ? <CheckCircle2 className="shrink-0 mt-0.5" size={20} /> : <XCircle className="shrink-0 mt-0.5" size={20} />}
             <div className="text-sm">
-              <p className="font-bold">{openAIResult.success ? 'Sucesso!' : 'Erro na conex√£o'}</p>
+              <p className="font-bold">{openAIResult.success ? 'Sucesso!' : 'Erro na conexao'}</p>
               <p>{openAIResult.success ? openAIResult.message : openAIResult.error}</p>
             </div>
           </div>
@@ -222,4 +201,3 @@ export const ConfigGeminiPage: React.FC = () => {
     </div>
   );
 };
-
