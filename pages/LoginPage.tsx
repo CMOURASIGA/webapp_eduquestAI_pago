@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { storageService } from '../services/storageService';
 import { Button } from '../components/ui/Button';
@@ -23,6 +23,14 @@ export const LoginPage: React.FC = () => {
   const [role, setRole] = useState<'professor' | 'aluno'>('aluno');
   const [recentNames, setRecentNames] = useState<string[]>([]);
   const [showInstructions, setShowInstructions] = useState(false);
+
+  const specialStudent = useMemo(() => (process.env.SPECIAL_STUDENT_NAME || 'LUCAS').toLowerCase(), []);
+  const specialProfessor = useMemo(() => (process.env.SPECIAL_PROFESSOR_NAME || 'CHRISTIAN').toLowerCase(), []);
+  const normalizedName = name.trim().toLowerCase();
+  const needsKeyReminder = normalizedName.length > 0 && (
+    (role === 'aluno' && normalizedName !== specialStudent) ||
+    (role === 'professor' && normalizedName !== specialProfessor)
+  );
 
   useEffect(() => {
     setRecentNames(storageService.getRecentNames());
@@ -122,6 +130,13 @@ export const LoginPage: React.FC = () => {
                 <span className="font-bold text-sm">Professor</span>
               </button>
             </div>
+
+            {needsKeyReminder && (
+              <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs leading-relaxed">
+                Para usar a IA será necessário informar a chave de acesso nas Configurações. Sem a chave o sistema não funcionará.
+                Depois de vincular, não precisa repetir em novos acessos (somente se usar em outro dispositivo/local).
+              </div>
+            )}
           </div>
 
           <Button type="submit" className="w-full py-4 text-lg">

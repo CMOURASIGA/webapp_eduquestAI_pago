@@ -137,7 +137,7 @@ export const ConfigGeminiPage: React.FC = () => {
             <KeyRound size={18} /> Chave do Gemini (sob demanda)
           </label>
           <p className="text-xs text-slate-500">
-            A chave padr√£o vem da vari√°vel do Vercel <code>API_KEY</code>. A chave abaixo s√≥ ser√° usada se o perfil for aluno <strong>{process.env.SPECIAL_STUDENT_NAME || 'LUCAS'}</strong> ou professor <strong>{process.env.SPECIAL_PROFESSOR_NAME || 'CHRISTIAN'}</strong>.
+            A chave padr„o vem da vari·vel do Vercel <code>API_KEY</code>. Se n„o houver uma chave vinculada no ambiente, informe abaixo para habilitar o uso da IA. Depois de vincular, n„o È necess·rio repetir em sessıes futuras (exceto se mudar o dispositivo/local de uso).
           </p>
 
           <input
@@ -146,25 +146,25 @@ export const ConfigGeminiPage: React.FC = () => {
             onChange={(e) => setCustomKeyDraft(e.target.value)}
             disabled={!canUseCustomApiKey}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
-            placeholder="Cole aqui a chave do Gemini para os perfis especiais"
+            placeholder="Cole aqui a chave do Gemini"
           />
 
           <div className="text-xs text-slate-500">
             {canUseCustomApiKey ? (
               <span className="text-emerald-700 font-medium">
-                Voc√™ est√° logado como {userProfile?.role === 'aluno' ? 'aluno' : 'professor'} {userProfile?.name}. Esta chave ser√° usada nas pr√≥ximas chamadas.
+                VocÍ est· logado como {userProfile?.role === 'aluno' ? 'aluno' : 'professor'} {userProfile?.name}. Esta chave ser· usada nas prÛximas chamadas.
               </span>
             ) : (
               <span className="text-slate-500">
-                A chave customizada s√≥ pode ser definida quando o login for dos nomes autorizados.
+                A ediÁ„o da chave customizada fica disponÌvel apenas para perfis autorizados. Se vocÍ precisar informar a chave e o campo estiver bloqueado, entre em contato com o respons·vel pelo acesso.
               </span>
             )}
           </div>
 
           <div className="text-xs text-slate-500">
-            Fonte ativa: {apiKeySource === 'custom' ? 'Chave customizada' : apiKeySource === 'env' ? 'Vari√°vel API_KEY (Vercel)' : 'Nenhuma chave encontrada'}.
+            Fonte ativa: {apiKeySource === 'custom' ? 'Chave customizada' : apiKeySource === 'env' ? 'Vari·vel API_KEY (Vercel)' : 'Nenhuma chave encontrada'}.
             {apiKeySource === 'custom' && (
-              <span className="text-emerald-700 font-semibold"> A chave customizada est√° habilitada para este usu√°rio.</span>
+              <span className="text-emerald-700 font-semibold"> A chave customizada est· habilitada para este usu√°rio.</span>
             )}
           </div>
         </div>
@@ -222,3 +222,4 @@ export const ConfigGeminiPage: React.FC = () => {
     </div>
   );
 };
+
