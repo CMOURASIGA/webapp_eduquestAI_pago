@@ -15,7 +15,7 @@ import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, BookOpen, Target, FileText, AlertTriangle } from 'lucide-react';
 
 export const NovaProvaPage: React.FC = () => {
-  const { selectedModel, aiProvider } = useGeminiConfig();
+  const { selectedModel, aiProvider, activeApiKey, apiKeySource } = useGeminiConfig();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -42,6 +42,11 @@ export const NovaProvaPage: React.FC = () => {
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (aiProvider === 'gemini' && !activeApiKey) {
+      setError("Nenhuma chave do Gemini está disponível. Configure a variável API_KEY na Vercel ou defina uma chave customizada para o usuário autorizado.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -49,7 +54,8 @@ export const NovaProvaPage: React.FC = () => {
       const params = {
         ...formData,
         conteudoBase: [formData.conteudoBase],
-        modelName: selectedModel
+        modelName: selectedModel,
+        apiKey: aiProvider === 'gemini' ? activeApiKey : undefined
       };
 
       let generated;

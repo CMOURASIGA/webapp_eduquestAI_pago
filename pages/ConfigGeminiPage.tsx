@@ -1,15 +1,27 @@
-
 import React, { useState } from 'react';
 import { useGeminiConfig, AIProvider } from '../context/GeminiConfigContext';
 import { Button } from '../components/ui/Button';
-import { ShieldCheck, AlertCircle, CheckCircle2, XCircle, Cpu } from 'lucide-react';
+import { ShieldCheck, AlertCircle, CheckCircle2, XCircle, Cpu, KeyRound } from 'lucide-react';
 import { testOpenAIConnection } from '../services/openaiService';
 
 export const ConfigGeminiPage: React.FC = () => {
-  const { selectedModel, setSelectedModel, aiProvider, setAiProvider } = useGeminiConfig();
+  const { 
+    selectedModel, 
+    setSelectedModel, 
+    aiProvider, 
+    setAiProvider,
+    customApiKey,
+    setCustomApiKey,
+    canUseCustomApiKey,
+    activeApiKey,
+    apiKeySource,
+    userProfile
+  } = useGeminiConfig();
+
   const [model, setModel] = useState(selectedModel);
   const [provider, setProvider] = useState<AIProvider>(aiProvider);
   const [saved, setSaved] = useState(false);
+  const [customKeyDraft, setCustomKeyDraft] = useState(customApiKey);
   
   const [testingOpenAI, setTestingOpenAI] = useState(false);
   const [openAIResult, setOpenAIResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
@@ -18,6 +30,11 @@ export const ConfigGeminiPage: React.FC = () => {
     e.preventDefault();
     setAiProvider(provider);
     setSelectedModel(model);
+
+    if (canUseCustomApiKey) {
+      setCustomApiKey(customKeyDraft.trim());
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -113,6 +130,43 @@ export const ConfigGeminiPage: React.FC = () => {
               </>
             )}
           </select>
+        </div>
+
+        <div className="space-y-2 pt-4">
+          <label className="block text-sm font-bold text-slate-700 flex items-center gap-2">
+            <KeyRound size={18} /> Chave do Gemini (sob demanda)
+          </label>
+          <p className="text-xs text-slate-500">
+            A chave padrão vem da variável do Vercel <code>API_KEY</code>. A chave abaixo só será usada se o perfil for aluno <strong>{process.env.SPECIAL_STUDENT_NAME || 'LUCAS'}</strong> ou professor <strong>{process.env.SPECIAL_PROFESSOR_NAME || 'CHRISTIAN'}</strong>.
+          </p>
+
+          <input
+            type="password"
+            value={customKeyDraft}
+            onChange={(e) => setCustomKeyDraft(e.target.value)}
+            disabled={!canUseCustomApiKey}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
+            placeholder="Cole aqui a chave do Gemini para os perfis especiais"
+          />
+
+          <div className="text-xs text-slate-500">
+            {canUseCustomApiKey ? (
+              <span className="text-emerald-700 font-medium">
+                Você está logado como {userProfile?.role === 'aluno' ? 'aluno' : 'professor'} {userProfile?.name}. Esta chave será usada nas próximas chamadas.
+              </span>
+            ) : (
+              <span className="text-slate-500">
+                A chave customizada só pode ser definida quando o login for dos nomes autorizados.
+              </span>
+            )}
+          </div>
+
+          <div className="text-xs text-slate-500">
+            Fonte ativa: {apiKeySource === 'custom' ? 'Chave customizada' : apiKeySource === 'env' ? 'Variável API_KEY (Vercel)' : 'Nenhuma chave encontrada'}.
+            {apiKeySource === 'custom' && (
+              <span className="text-emerald-700 font-semibold"> A chave customizada está habilitada para este usuário.</span>
+            )}
+          </div>
         </div>
 
         <div className="pt-4 border-t mt-6">

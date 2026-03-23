@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Exam, Question, SerieEscolar } from "../types/exam";
 import { buildExamGenerationPrompt } from "../utils/examGenerationPromptBuilder";
@@ -11,15 +10,14 @@ interface GenerateParams {
   conteudoBase: string[];
   nivelDificuldade: "baixa" | "media" | "alta";
   modelName: string;
+  apiKey?: string;
 }
 
 export async function generateExamWithGemini(params: GenerateParams): Promise<Partial<Exam>> {
-  // A chave de API deve estar disponível em process.env.API_KEY.
-  // Criamos a instância aqui para garantir o uso da chave injetada no ambiente.
-  const apiKey = process.env.API_KEY;
+  const apiKey = params.apiKey || process.env.API_KEY;
   
   if (!apiKey) {
-    throw new Error("API_KEY não encontrada no ambiente. Verifique as configurações da Vercel.");
+    throw new Error("Nenhuma chave de API foi encontrada. Configure a variável API_KEY na Vercel ou defina uma chave customizada para o usuário autorizado.");
   }
 
   const ai = new GoogleGenAI({ apiKey });

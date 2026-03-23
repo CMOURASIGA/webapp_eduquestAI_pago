@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
-import { Exam, Question } from '../types/exam';
+import { Exam, Question, Alternative } from '../types/exam';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { QuestionCard } from '../components/provas/QuestionCard';
 import { ExamSummary } from '../components/provas/ExamSummary';
@@ -95,6 +95,11 @@ export const ProvaDetalhePage: React.FC = () => {
 
   const answeredCount = Object.keys(userAnswers).length;
   const isFinished = answeredCount === exam.questions.length;
+  const getAnswerLabel = (question: Question) => {
+    const correctId = question.alternativaCorretaId;
+    const alt = question.alternativas.find((a: Alternative) => a.id === correctId);
+    return alt?.label || '-';
+  };
 
   return (
     <div className="max-w-4xl mx-auto pb-24 print:pb-0 print:max-w-none">
@@ -167,17 +172,39 @@ export const ProvaDetalhePage: React.FC = () => {
         />
       ) : (
         <div className="space-y-6 print:space-y-8">
-          {exam.questions.map((question, idx) => (
-            <div key={question.id} className="print:break-inside-avoid">
-              <QuestionCard
-                index={idx}
-                question={question}
-                mode={appMode}
-                onAnswer={handleAnswer}
-                selectedAnswerId={userAnswers[question.id]}
-              />
+          {exam.questions.map((question, idx) => {
+            const isPageEnd = (idx + 1) % 3 === 0;
+            return (
+              <div 
+                key={question.id} 
+                className={`print:break-inside-avoid print:bg-white print:border print:border-slate-200 print:rounded-2xl print:p-4 print:shadow-none ${isPageEnd ? 'print:break-after-page' : ''}`}
+              >
+                <QuestionCard
+                  index={idx}
+                  question={question}
+                  mode={appMode}
+                  onAnswer={handleAnswer}
+                  selectedAnswerId={userAnswers[question.id]}
+                />
+              </div>
+            );
+          })}
+
+          {/* Gabarito (impressÃ£o) */}
+          <div className="hidden print:block break-before-page mt-12">
+            <div className="border-b-2 border-slate-900 pb-4 mb-6">
+              <h2 className="text-2xl font-black uppercase">Gabarito</h2>
+              <p className="text-sm text-slate-700">Resumos das respostas corretas para conferÃªncia rÃ¡pida.</p>
             </div>
-          ))}
+            <div className="grid grid-cols-2 gap-4 print:text-sm">
+              {exam.questions.map((q, idx) => (
+                <div key={q.id} className="flex items-center justify-between border border-slate-200 rounded-xl px-4 py-3 bg-slate-50">
+                  <div className="font-bold text-slate-800">QuestÃ£o {idx + 1}</div>
+                  <div className="text-indigo-700 font-black text-lg">{getAnswerLabel(q)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {appMode === 'aluno' && !isFinished && (
             <div className="sticky bottom-8 left-0 right-0 p-4 bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-xl flex items-center justify-between z-10 animate-in slide-in-from-bottom-8 print:hidden">
