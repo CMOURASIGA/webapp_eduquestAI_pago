@@ -132,10 +132,10 @@ export const ConfigGeminiPage: React.FC = () => {
 
         <div className="space-y-2 pt-4">
           <label className="block text-sm font-bold text-slate-700 flex items-center gap-2">
-            <KeyRound size={18} /> Chave do Gemini (sob demanda)
+            <KeyRound size={18} /> Chave da IA (Gemini ou OpenAI)
           </label>
           <p className="text-xs text-slate-500">
-            A chave padrao vem da variavel do Vercel <code>API_KEY</code>. Se nao houver uma chave no ambiente, informe abaixo para habilitar o uso da IA.
+            A chave padrao vem da variavel do Vercel <code>API_KEY</code> (Gemini) ou <code>OPENAI_API_KEY</code> (OpenAI). Se nao houver uma chave no ambiente, informe abaixo para habilitar o uso da IA.
           </p>
 
           <input
@@ -144,7 +144,7 @@ export const ConfigGeminiPage: React.FC = () => {
             onChange={(e) => setCustomKeyDraft(e.target.value)}
             disabled={!canUseCustomApiKey}
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
-            placeholder="Cole aqui a chave do Gemini"
+            placeholder="Cole aqui a chave da IA"
           />
         </div>
 
