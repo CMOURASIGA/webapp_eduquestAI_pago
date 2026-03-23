@@ -190,16 +190,16 @@ export const ProvaDetalhePage: React.FC = () => {
             );
           })}
 
-          {/* Gabarito (impressÃ£o) */}
+          {/* Gabarito (impressao) */}
           <div className="hidden print:block break-before-page mt-12">
             <div className="border-b-2 border-slate-900 pb-4 mb-6">
               <h2 className="text-2xl font-black uppercase">Gabarito</h2>
-              <p className="text-sm text-slate-700">Resumos das respostas corretas para conferÃªncia rÃ¡pida.</p>
+              <p className="text-sm text-slate-700">Resumos das respostas corretas para conferencia rapida.</p>
             </div>
             <div className="grid grid-cols-2 gap-4 print:text-sm">
               {exam.questions.map((q, idx) => (
                 <div key={q.id} className="flex items-center justify-between border border-slate-200 rounded-xl px-4 py-3 bg-slate-50">
-                  <div className="font-bold text-slate-800">QuestÃ£o {idx + 1}</div>
+                  <div className="font-bold text-slate-800">Questao {idx + 1}</div>
                   <div className="text-indigo-700 font-black text-lg">{getAnswerLabel(q)}</div>
                 </div>
               ))}
