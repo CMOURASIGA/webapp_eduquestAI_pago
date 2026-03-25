@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
@@ -9,7 +8,7 @@ import { ExamSummary } from '../components/provas/ExamSummary';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { serieLabels } from '../utils/seriesUtils';
-import { ArrowLeft, Send, CheckCircle2, RotateCcw, Printer, FileDown } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle2, RotateCcw, Printer } from 'lucide-react';
 import { saveAnswers } from '../services/performanceService';
 
 export const ProvaDetalhePage: React.FC = () => {
@@ -20,13 +19,14 @@ export const ProvaDetalhePage: React.FC = () => {
   const [exam, setExam] = useState<Exam | null>(null);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [showSummary, setShowSummary] = useState(false);
+  const [reviewMode, setReviewMode] = useState<'none' | 'errors'>('none');
 
   useEffect(() => {
     if (id) {
       const found = storageService.getExamById(id);
       if (found) {
         setExam(found);
-        // Se a prova já foi concluída anteriormente e estamos no modo resumo, poderíamos carregar...
+        // Se a prova ja foi concluida anteriormente e estamos no modo resumo, poderiamos carregar...
         // Mas para este fluxo, permitimos que o aluno responda novamente se desejar.
       }
       else navigate('/provas');
@@ -73,19 +73,21 @@ export const ProvaDetalhePage: React.FC = () => {
       };
       await saveAnswers(payload);
 
-      // Atualizar estado local para refletir a mudança
+      // Atualizar estado local para refletir a mudanca
       setExam(updatedExam);
       setShowSummary(true);
+      setReviewMode('none');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       console.error("Falha ao registrar respostas:", err);
-      alert("As respostas foram salvas localmente, mas não foi possível registrar no servidor. Tente novamente mais tarde.");
+      alert("As respostas foram salvas localmente, mas nao foi possivel registrar no servidor. Tente novamente mais tarde.");
     }
   };
 
   const handleReset = () => {
     setUserAnswers({});
     setShowSummary(false);
+    setReviewMode('none');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -95,15 +97,26 @@ export const ProvaDetalhePage: React.FC = () => {
 
   const answeredCount = Object.keys(userAnswers).length;
   const isFinished = answeredCount === exam.questions.length;
+  const wrongQuestions = exam.questions.filter((q) => {
+    const selected = userAnswers[q.id];
+    return selected && selected !== q.alternativaCorretaId;
+  });
+  const questionsForReview = wrongQuestions.length > 0 ? wrongQuestions : exam.questions;
+
   const getAnswerLabel = (question: Question) => {
     const correctId = question.alternativaCorretaId;
     const alt = question.alternativas.find((a: Alternative) => a.id === correctId);
     return alt?.label || '-';
   };
 
+  const toggleReviewErrors = () => {
+    setReviewMode((prev) => prev === 'errors' ? 'none' : 'errors');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-24 print:pb-0 print:max-w-none">
-      {/* Cabeçalho de Impressão (visível apenas ao imprimir) */}
+      {/* Cabecalho de Impressao (visivel apenas ao imprimir) */}
       <div className="hidden print:block mb-8 border-b-2 border-slate-900 pb-4">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -137,7 +150,7 @@ export const ProvaDetalhePage: React.FC = () => {
                 <Badge variant="warning">Progresso: {answeredCount}/{exam.questions.length}</Badge>
               )}
               {appMode === 'aluno' && exam.completed && !showSummary && (
-                <Badge variant="success">Última Nota: {exam.lastScore}%</Badge>
+                <Badge variant="success">Ultima Nota: {exam.lastScore}%</Badge>
               )}
             </div>
             <h1 className="text-3xl font-black text-slate-800">{exam.title}</h1>
@@ -165,11 +178,50 @@ export const ProvaDetalhePage: React.FC = () => {
       </header>
 
       {showSummary ? (
-        <ExamSummary 
-          questions={exam.questions} 
-          userAnswers={userAnswers} 
-          onReset={handleReset}
-        />
+        <>
+          <ExamSummary 
+            questions={exam.questions} 
+            userAnswers={userAnswers} 
+            onReset={handleReset}
+            onReviewErrors={toggleReviewErrors}
+            isReviewingErrors={reviewMode === 'errors'}
+            wrongCount={wrongQuestions.length}
+          />
+
+          {reviewMode === 'errors' && (
+            <div className="mt-8 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-black text-slate-800">
+                  {wrongQuestions.length > 0 ? 'Questoes que voce errou' : 'Revisao rapida das questoes'}
+                </h3>
+                <Badge variant="warning">
+                  {wrongQuestions.length > 0 
+                    ? `${wrongQuestions.length} de ${exam.questions.length}` 
+                    : `${exam.questions.length} questoes respondidas`}
+                </Badge>
+              </div>
+              <p className="text-slate-500">
+                {wrongQuestions.length > 0
+                  ? 'Confira as alternativas que marcou em vermelho e as corretas em verde.'
+                  : 'Nenhum erro desta vez! Veja abaixo o gabarito comentado.'}
+              </p>
+              <div className="space-y-6">
+                {questionsForReview.map((question) => {
+                  const questionIndex = exam.questions.findIndex((q) => q.id === question.id);
+                  return (
+                    <QuestionCard
+                      key={question.id}
+                      index={questionIndex}
+                      question={question}
+                      mode={appMode}
+                      selectedAnswerId={userAnswers[question.id]}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <div className="space-y-6 print:space-y-8">
           {exam.questions.map((question, idx) => {
@@ -233,7 +285,7 @@ export const ProvaDetalhePage: React.FC = () => {
         </div>
       )}
 
-      {/* Rodapé de Impressão */}
+      {/* Rodape de Impressao */}
       <div className="hidden print:block mt-12 pt-4 border-t border-slate-200 text-center text-[10px] text-slate-400">
         Gerado por EduQuest IA - Material de Estudo Personalizado
       </div>

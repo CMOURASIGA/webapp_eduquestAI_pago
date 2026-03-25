@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Question } from '../../types/exam';
 import { Button } from '../ui/Button';
@@ -8,18 +7,21 @@ interface ExamSummaryProps {
   questions: Question[];
   userAnswers: Record<string, string>;
   onReset: () => void;
+  onReviewErrors: () => void;
+  isReviewingErrors: boolean;
+  wrongCount: number;
 }
 
-export const ExamSummary: React.FC<ExamSummaryProps> = ({ questions, userAnswers, onReset }) => {
+export const ExamSummary: React.FC<ExamSummaryProps> = ({ questions, userAnswers, onReset, onReviewErrors, isReviewingErrors, wrongCount }) => {
   const total = questions.length;
   const correctCount = questions.filter(q => userAnswers[q.id] === q.alternativaCorretaId).length;
   const scorePercentage = Math.round((correctCount / total) * 100);
 
   const getMessage = () => {
-    if (scorePercentage >= 90) return "Desempenho Excelente! Você dominou o conteúdo.";
+    if (scorePercentage >= 90) return "Desempenho excelente! Voce dominou o conteudo.";
     if (scorePercentage >= 70) return "Muito bem! Continue estudando os detalhes.";
     if (scorePercentage >= 50) return "Bom progresso, mas revise os pontos que errou.";
-    return "Não desanime! Use as explicações para reforçar sua base.";
+    return "Nao desanime! Use as explicacoes para reforcar sua base.";
   };
 
   return (
@@ -28,7 +30,7 @@ export const ExamSummary: React.FC<ExamSummaryProps> = ({ questions, userAnswers
         <div className="inline-flex p-4 rounded-full bg-amber-50 text-amber-500 mb-6">
           <Trophy size={64} />
         </div>
-        <h2 className="text-3xl font-bold text-slate-800 mb-2">Simulado Concluído!</h2>
+        <h2 className="text-3xl font-bold text-slate-800 mb-2">Simulado Concluido!</h2>
         <p className="text-slate-500 mb-8">{getMessage()}</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
@@ -48,9 +50,11 @@ export const ExamSummary: React.FC<ExamSummaryProps> = ({ questions, userAnswers
           </div>
         </div>
 
-        <div className="flex gap-4 justify-center">
-          <Button variant="outline" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            Revisar Questões
+        <div className="flex gap-4 justify-center flex-wrap">
+          <Button variant="outline" onClick={onReviewErrors}>
+            {wrongCount > 0 
+              ? `${isReviewingErrors ? 'Ocultar' : 'Ver'} ${wrongCount} ${wrongCount === 1 ? 'questao errada' : 'questoes erradas'}`
+              : 'Ver questoes respondidas'}
           </Button>
           <Button variant="primary" onClick={onReset}>
             Refazer Simulado
@@ -61,17 +65,17 @@ export const ExamSummary: React.FC<ExamSummaryProps> = ({ questions, userAnswers
       <div className="bg-indigo-600 p-8 rounded-2xl shadow-lg text-white">
         <div className="flex items-center gap-3 mb-4">
           <BookOpen size={32} />
-          <h3 className="text-xl font-bold">Recomendações de Estudo</h3>
+          <h3 className="text-xl font-bold">Recomendacoes de Estudo</h3>
         </div>
         <p className="opacity-90 leading-relaxed mb-6">
-          Com base no seu desempenho, sugerimos focar nos tópicos das questões que você errou. 
-          Aproveite as explicações fornecidas pela IA para entender o raciocínio correto.
+          Com base no seu desempenho, sugerimos focar nos topicos das questoes que voce errou. 
+          Aproveite as explicacoes fornecidas pela IA para entender o raciocinio correto.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {questions.filter(q => userAnswers[q.id] !== q.alternativaCorretaId).slice(0, 4).map((q, idx) => (
             <div key={idx} className="bg-white/10 p-4 rounded-xl border border-white/20">
               <span className="text-xs font-bold uppercase opacity-60">Tema Sugerido</span>
-              <p className="font-medium text-sm line-clamp-2">{q.competenciaOuHabilidade || "Tópico da Questão " + (questions.indexOf(q) + 1)}</p>
+              <p className="font-medium text-sm line-clamp-2">{q.competenciaOuHabilidade || "Topico da Questao " + (questions.indexOf(q) + 1)}</p>
             </div>
           ))}
         </div>
