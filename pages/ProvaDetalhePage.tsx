@@ -126,6 +126,11 @@ export const ProvaDetalhePage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const questionPairs: Array<[Question, Question | null]> = [];
+  for (let i = 0; i < exam.questions.length; i += 2) {
+    questionPairs.push([exam.questions[i], exam.questions[i + 1] || null]);
+  }
+
   return (
     <div className="max-w-4xl mx-auto pb-24 print:pb-0 print:max-w-none">
       <div className="print:hidden">
@@ -277,24 +282,42 @@ export const ProvaDetalhePage: React.FC = () => {
           </div>
         </div>
 
-        {exam.questions.map((question, idx) => {
-          const shouldBreakPage = (idx + 1) % 8 === 0 && idx !== exam.questions.length - 1;
-          return (
-            <div key={`print-question-${question.id}`} className={shouldBreakPage ? 'print:break-after-page' : ''}>
-              <div className="mb-5">
-                <h3 className="font-bold text-base leading-6 mb-2">Questao {idx + 1}</h3>
-                <p className="text-sm leading-6 mb-3">{question.enunciado}</p>
-                <div className="space-y-1 text-sm leading-6">
-                  {question.alternativas.map((alt) => (
-                    <p key={`${question.id}-${alt.id}`}>
-                      <span className="font-semibold">{alt.label})</span> {alt.texto}
-                    </p>
-                  ))}
+        <div className="grid grid-cols-2 gap-3">
+          {questionPairs.map(([leftQuestion, rightQuestion], pairIndex) => {
+            const leftIdx = pairIndex * 2;
+            return (
+              <React.Fragment key={`print-question-pair-${leftQuestion.id}`}>
+                <div className="border border-slate-300 rounded-lg p-3 break-inside-avoid">
+                  <h3 className="font-bold text-[13px] leading-5 mb-2">Questao {leftIdx + 1}</h3>
+                  <p className="text-[11px] leading-5 mb-2">{leftQuestion.enunciado}</p>
+                  <div className="space-y-1 text-[10px] leading-4">
+                    {leftQuestion.alternativas.map((alt) => (
+                      <p key={`${leftQuestion.id}-${alt.id}`} className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
+                        <span className="font-semibold">{alt.label})</span> {alt.texto}
+                      </p>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+
+                {rightQuestion ? (
+                  <div className="border border-slate-300 rounded-lg p-3 break-inside-avoid">
+                    <h3 className="font-bold text-[13px] leading-5 mb-2">Questao {leftIdx + 2}</h3>
+                    <p className="text-[11px] leading-5 mb-2">{rightQuestion.enunciado}</p>
+                    <div className="space-y-1 text-[10px] leading-4">
+                      {rightQuestion.alternativas.map((alt) => (
+                        <p key={`${rightQuestion.id}-${alt.id}`} className="border border-slate-200 rounded px-2 py-1 bg-slate-50">
+                          <span className="font-semibold">{alt.label})</span> {alt.texto}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
 
         <div className="break-before-page">
           <div className="border-b-2 border-slate-900 pb-3 mb-5">
@@ -309,28 +332,64 @@ export const ProvaDetalhePage: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-4">
-            {exam.questions.map((question, idx) => {
-              const correctAlternative = getAlternativeById(question, question.alternativaCorretaId);
-              const selectedAlternative = getAlternativeById(question, userAnswers[question.id]);
-              const isCorrect = userAnswers[question.id] === question.alternativaCorretaId;
+          <div className="space-y-3">
+            {questionPairs.map(([leftQuestion, rightQuestion], pairIndex) => {
+              const leftIdx = pairIndex * 2;
+              const leftCorrectAlternative = getAlternativeById(leftQuestion, leftQuestion.alternativaCorretaId);
+              const leftSelectedAlternative = getAlternativeById(leftQuestion, userAnswers[leftQuestion.id]);
+              const leftIsCorrect = userAnswers[leftQuestion.id] === leftQuestion.alternativaCorretaId;
+
+              const rightCorrectAlternative = rightQuestion
+                ? getAlternativeById(rightQuestion, rightQuestion.alternativaCorretaId)
+                : null;
+              const rightSelectedAlternative = rightQuestion
+                ? getAlternativeById(rightQuestion, userAnswers[rightQuestion.id])
+                : null;
+              const rightIsCorrect = rightQuestion
+                ? userAnswers[rightQuestion.id] === rightQuestion.alternativaCorretaId
+                : false;
+
               return (
-                <div key={`print-answer-${question.id}`} className="border border-slate-300 rounded-lg p-3 text-sm break-inside-avoid">
-                  <p className="font-bold mb-2">Questao {idx + 1}</p>
-                  <p className="mb-1">
-                    <strong>Gabarito:</strong> {correctAlternative?.label || getAnswerLabel(question)}
-                    {correctAlternative ? ` - ${correctAlternative.texto}` : ''}
-                  </p>
-
-                  {hasPrintableResults && (
+                <div key={`print-answer-row-${leftQuestion.id}`} className="grid grid-cols-2 gap-3 text-[11px]">
+                  <div className="border border-slate-300 rounded-lg p-3 break-inside-avoid">
+                    <p className="font-bold mb-2">Questao {leftIdx + 1}</p>
                     <p className="mb-1">
-                      <strong>Marcada:</strong> {selectedAlternative ? `${selectedAlternative.label} - ${selectedAlternative.texto}` : 'Nao respondida'}
-                      {' | '}
-                      <strong>Status:</strong> {selectedAlternative ? (isCorrect ? 'Acertou' : 'Errou') : 'Nao respondida'}
+                      <strong>Gabarito:</strong> {leftCorrectAlternative?.label || getAnswerLabel(leftQuestion)}
+                      {leftCorrectAlternative ? ` - ${leftCorrectAlternative.texto}` : ''}
                     </p>
-                  )}
 
-                  <p><strong>Justificativa:</strong> {question.explicacao}</p>
+                    {hasPrintableResults && (
+                      <p className="mb-1">
+                        <strong>Marcada:</strong> {leftSelectedAlternative ? `${leftSelectedAlternative.label} - ${leftSelectedAlternative.texto}` : 'Nao respondida'}
+                        {' | '}
+                        <strong>Status:</strong> {leftSelectedAlternative ? (leftIsCorrect ? 'Acertou' : 'Errou') : 'Nao respondida'}
+                      </p>
+                    )}
+
+                    <p><strong>Justificativa:</strong> {leftQuestion.explicacao}</p>
+                  </div>
+
+                  {rightQuestion ? (
+                    <div className="border border-slate-300 rounded-lg p-3 break-inside-avoid">
+                      <p className="font-bold mb-2">Questao {leftIdx + 2}</p>
+                      <p className="mb-1">
+                        <strong>Gabarito:</strong> {rightCorrectAlternative?.label || getAnswerLabel(rightQuestion)}
+                        {rightCorrectAlternative ? ` - ${rightCorrectAlternative.texto}` : ''}
+                      </p>
+
+                      {hasPrintableResults && (
+                        <p className="mb-1">
+                          <strong>Marcada:</strong> {rightSelectedAlternative ? `${rightSelectedAlternative.label} - ${rightSelectedAlternative.texto}` : 'Nao respondida'}
+                          {' | '}
+                          <strong>Status:</strong> {rightSelectedAlternative ? (rightIsCorrect ? 'Acertou' : 'Errou') : 'Nao respondida'}
+                        </p>
+                      )}
+
+                      <p><strong>Justificativa:</strong> {rightQuestion.explicacao}</p>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
                 </div>
               );
             })}
