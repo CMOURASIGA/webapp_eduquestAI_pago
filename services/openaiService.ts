@@ -72,6 +72,7 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(params.authToken ? { Authorization: `Bearer ${params.authToken}` } : {}),
     },
     body: JSON.stringify({
       modelName: params.modelName || 'gpt-4o-mini',
@@ -132,12 +133,13 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
   return questions;
 }
 
-export async function testOpenAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function testOpenAIConnection(authToken?: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const response = await fetch('/api/openai/test', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
     });
 
@@ -160,6 +162,7 @@ interface GenerateParams {
   conteudoBase: string[];
   nivelDificuldade: "baixa" | "media" | "alta";
   modelName: string;
+  authToken?: string;
 }
 
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {

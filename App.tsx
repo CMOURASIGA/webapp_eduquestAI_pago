@@ -14,7 +14,8 @@ import { LoginPage } from './pages/LoginPage';
 import { ConfigGeminiPage } from './pages/ConfigGeminiPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { userProfile } = useGeminiConfig();
+  const { userProfile, authLoading } = useGeminiConfig();
+  if (authLoading) return null;
   if (!userProfile) return <LoginPage />;
   return <MainLayout>{children}</MainLayout>;
 };

@@ -13,7 +13,7 @@ export const ConfigGeminiPage: React.FC = () => {
     customApiKey,
     setCustomApiKey,
     canUseCustomApiKey,
-    userProfile
+    authToken
   } = useGeminiConfig();
 
   const [model, setModel] = useState(selectedModel);
@@ -49,7 +49,7 @@ export const ConfigGeminiPage: React.FC = () => {
   const handleTestOpenAI = async () => {
     setTestingOpenAI(true);
     setOpenAIResult(null);
-    const result = await testOpenAIConnection();
+    const result = await testOpenAIConnection(authToken);
     setOpenAIResult(result);
     setTestingOpenAI(false);
   };
