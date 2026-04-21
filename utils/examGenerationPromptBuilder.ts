@@ -1,4 +1,4 @@
-import { SerieEscolar } from '../types/exam';
+﻿import { SerieEscolar } from '../types/exam';
 import { serieLabels, getAgeRange } from './seriesUtils';
 import { QUESTIONS_PER_EXAM } from './examConfig';
 
@@ -8,7 +8,7 @@ interface PromptParams {
   objetivo: string;
   conteudoBase: string[];
   nivelDificuldade: "baixa" | "media" | "alta";
-  // Opcional para geração em lotes: quantas questões gerar e a partir de qual índice.
+  // Opcional para geracao em lotes: quantas questoes gerar e a partir de qual indice.
   questionsCount?: number;
   questionOffset?: number;
 }
@@ -22,27 +22,37 @@ export const buildExamGenerationPrompt = (params: PromptParams): string => {
   const startNumber = questionOffset + 1;
   const endNumber = questionOffset + questionsToGenerate;
 
-  return `Aja como um professor especialista brasileiro criando uma prova de ESTUDO para alunos do ${label} (faixa etária aproximada: ${age}).
-A disciplina é "${disciplina}".
-O objetivo pedagógico é: "${objetivo}".
-Nível de dificuldade desejado: ${nivelDificuldade}.
+  return `Aja como um professor especialista brasileiro criando uma prova de ESTUDO para alunos do ${label} (faixa etaria aproximada: ${age}).
+A disciplina e "${disciplina}".
+O objetivo pedagogico e: "${objetivo}".
+Nivel de dificuldade desejado: ${nivelDificuldade}.
 
-USE O SEGUINTE CONTEÚDO BASE COMO REFERÊNCIA PRINCIPAL:
+USE O SEGUINTE CONTEUDO BASE COMO REFERENCIA PRINCIPAL:
 ---
 ${conteudoBase.join('\n\n')}
 ---
 
-INSTRUÇÕES IMPORTANTES:
-1. Gere EXATAMENTE ${questionsToGenerate} questões de múltipla escolha.
-1.1. Numere e identifique este lote de questões de ${startNumber} até ${endNumber} (ex.: q${startNumber}, q${startNumber + 1}, ...). Evite repetir questões já criadas em outros lotes.
-2. Siga o estilo ENEM: enunciados contextualizados, interdisciplinares onde possível e foco em competências.
-3. Cada questão deve ter exatamente 5 alternativas (A, B, C, D, E).
-4. Apenas uma alternativa está correta.
-5. Para cada questão, escreva uma "explicacao" detalhada que ajude o aluno a aprender o conceito por trás da resposta correta e por que as outras estão erradas (orientação de estudo).
-6. Use linguagem e vocabulário adequados para a idade de ${age}.
-7. Ajuste o nível de dificuldade conforme pedido: "baixa" = perguntas diretas e objetivas; "media" = foco em interpretação de contexto; "alta" = raciocínio e aplicação do conhecimento em situações mais complexas.
-7. Retorne SOMENTE JSON válido. NÃO inclua texto antes ou depois do JSON.
-8. Use exatamente este formato de resposta:
+INSTRUCOES IMPORTANTES:
+1. Gere EXATAMENTE ${questionsToGenerate} questoes de multipla escolha.
+1.1. Numere e identifique este lote de questoes de ${startNumber} ate ${endNumber} (ex.: q${startNumber}, q${startNumber + 1}, ...). Evite repetir questoes ja criadas em outros lotes.
+2. Siga o estilo ENEM: enunciados contextualizados, interdisciplinares onde possivel e foco em competencias.
+3. Cada questao deve ter exatamente 5 alternativas (A, B, C, D, E).
+4. Apenas uma alternativa esta correta.
+5. Regra critica de qualidade: NAO gere questao com resposta errada, ambigua, desatualizada ou com mais de uma alternativa possivelmente correta.
+6. Antes de devolver o JSON final, valide CADA questao internamente (checklist silencioso):
+   - existe UMA UNICA alternativa correta;
+   - as outras 4 alternativas estao objetivamente incorretas;
+   - enunciado e gabarito estao coerentes entre si;
+   - nao ha dupla interpretacao de gabarito.
+   Se qualquer item falhar, reescreva a questao antes de responder.
+7. Para cada questao, escreva uma "explicacao" detalhada que ajude o aluno a aprender o conceito por tras da resposta correta e por que as outras estao erradas (orientacao de estudo).
+8. Estruture a explicacao neste formato:
+   "Correta: <letra> - <justificativa>. Incorretas: A - <motivo>; B - <motivo>; C - <motivo>; D - <motivo>; E - <motivo>."
+   (A alternativa correta tambem deve aparecer na parte Incorretas com a indicacao de que e a correta.)
+9. Use linguagem e vocabulario adequados para a idade de ${age}.
+10. Ajuste o nivel de dificuldade conforme pedido: "baixa" = perguntas diretas e objetivas; "media" = foco em interpretacao de contexto; "alta" = raciocinio e aplicacao do conhecimento em situacoes mais complexas.
+11. Retorne SOMENTE JSON valido. NAO inclua texto antes ou depois do JSON.
+12. Use exatamente este formato de resposta:
 {
   "questions": [
     {
@@ -60,8 +70,8 @@ INSTRUÇÕES IMPORTANTES:
     }
   ]
 }
-9. Garanta que cada questão tenha um ID único.
-10. A explicação deve: (a) justificar claramente por que a alternativa correta é correta; (b) apontar por que cada alternativa incorreta está errada; (c) usar linguagem e exemplos adequados para a série escolar.
+13. Garanta que cada questao tenha um ID unico.
+14. A explicacao deve: (a) justificar claramente por que a alternativa correta e correta; (b) apontar por que cada alternativa incorreta esta errada; (c) usar linguagem e exemplos adequados para a serie escolar.
 
 Sua resposta deve ser estritamente um objeto JSON contendo uma lista de 'questions'.`;
 };
