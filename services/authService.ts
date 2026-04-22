@@ -8,6 +8,8 @@ export interface AccountStatus {
   creditosUtilizados: number;
   validadeAte: string | null;
   pagamentoStatus: string;
+  freeOnceUsed?: boolean;
+  canActivateFreeOnce?: boolean;
   canGenerate: boolean;
   blockReasons: string[];
 }
@@ -115,6 +117,16 @@ export async function createCheckout(token: string, planoId: string) {
   const data = await parseJsonResponse(response);
   if (!response.ok) throw new Error(data.error || data.details || "Falha ao criar checkout.");
   return data;
+}
+
+export async function activateFreeOnce(token: string) {
+  const response = await fetch("/api/account/activate-free-once", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao ativar acesso gratuito.");
+  return data as { success: boolean; message: string; account: AccountStatus };
 }
 
 export async function fetchBillingMode(token: string) {

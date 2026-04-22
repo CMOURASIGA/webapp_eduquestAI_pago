@@ -122,6 +122,10 @@ const SHEET_PATH = path.join(LOGS_DIR, "sheetStore.json");
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
 const CREDITS_PER_QUESTION = Number(process.env.CREDITS_PER_QUESTION || 1);
 const MIN_MANUAL_RELEASE_HOURS = Number(process.env.MIN_MANUAL_RELEASE_HOURS || 1);
+const FREE_ONCE_PLAN_ID = process.env.FREE_ONCE_PLAN_ID || "FREE_ONCE";
+const FREE_ONCE_VOUCHER_MARK = "FREE_ONCE_USED";
+const FREE_ONCE_CREDITS = Number(process.env.FREE_ONCE_CREDITS || 40);
+const FREE_ONCE_VALIDITY_DAYS = Number(process.env.FREE_ONCE_VALIDITY_DAYS || 7);
 const PIX_PAYMENT_KEY = (process.env.PIX_PAYMENT_KEY || "").trim();
 const PIX_PAYMENT_RECIPIENT = (process.env.PIX_PAYMENT_RECIPIENT || "EduQuest IA").trim();
 const BILLING_MODE = PIX_PAYMENT_KEY ? "pix_manual" : "teste";
@@ -233,6 +237,7 @@ function defaultSheetData(): SheetData {
       { plano_id: "PRE100", nome_plano: "Pacote 100 questoes", tipo_plano: "prepago", valor: 29.9, creditos_inclusos: 100, validade_dias: 365, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Pacote pre-pago com validade de 12 meses" },
       { plano_id: "PRE300", nome_plano: "Pacote 300 questoes", tipo_plano: "prepago", valor: 69.9, creditos_inclusos: 300, validade_dias: 365, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Pacote pre-pago com validade de 12 meses" },
       { plano_id: "ANUAL_5ANO", nome_plano: "Plano anual 5o ano", tipo_plano: "anual", valor: 297, creditos_inclusos: 0, validade_dias: 365, serie: "5o ano", franquia_mensal: 200, ativo: "sim", descricao: "Plano anual com franquia mensal" },
+      { plano_id: FREE_ONCE_PLAN_ID, nome_plano: "Acesso gratuito inicial (1 execucao)", tipo_plano: "gratuito", valor: 0, creditos_inclusos: FREE_ONCE_CREDITS, validade_dias: FREE_ONCE_VALIDITY_DAYS, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Acesso unico gratuito por conta" },
       { plano_id: "FREE20", nome_plano: "Voucher Free 20", tipo_plano: "voucher", valor: 0, creditos_inclusos: 20, validade_dias: 30, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Voucher promocional" }
     ],
     pagamentos: [],
@@ -695,6 +700,42 @@ function normalizePaymentStatus(status: string) {
   return "pendente";
 }
 
+function hasUsedFreeOnce(cliente: ClienteRow) {
+  return String(cliente.voucher_codigo || "")
+    .split(";")
+    .map((v) => v.trim().toUpperCase())
+    .includes(FREE_ONCE_VOUCHER_MARK);
+}
+
+function ensureFreeOncePlan(sheet: SheetData) {
+  const exists = sheet.planos.some((p) => p.plano_id === FREE_ONCE_PLAN_ID);
+  if (exists) return;
+  sheet.planos.push({
+    plano_id: FREE_ONCE_PLAN_ID,
+    nome_plano: "Acesso gratuito inicial (1 execucao)",
+    tipo_plano: "gratuito",
+    valor: 0,
+    creditos_inclusos: FREE_ONCE_CREDITS,
+    validade_dias: FREE_ONCE_VALIDITY_DAYS,
+    serie: "geral",
+    franquia_mensal: 0,
+    ativo: "sim",
+    descricao: "Acesso unico gratuito por conta"
+  });
+}
+
+function appendVoucherMark(cliente: ClienteRow, mark: string) {
+  const current = String(cliente.voucher_codigo || "").trim();
+  if (!current) {
+    cliente.voucher_codigo = mark;
+    return;
+  }
+  const parts = current.split(";").map((v) => v.trim()).filter(Boolean);
+  if (parts.map((v) => v.toUpperCase()).includes(mark.toUpperCase())) return;
+  parts.push(mark);
+  cliente.voucher_codigo = parts.join(";");
+}
+
 function buildAccountStatus(cliente: ClienteRow) {
   const check = canGenerateFromCliente(cliente);
   return {
@@ -705,6 +746,8 @@ function buildAccountStatus(cliente: ClienteRow) {
     creditosUtilizados: Number(cliente.creditos_utilizados || 0),
     validadeAte: cliente.validade_ate || null,
     pagamentoStatus: cliente.pagamento_status,
+    freeOnceUsed: hasUsedFreeOnce(cliente),
+    canActivateFreeOnce: !hasUsedFreeOnce(cliente) && Number(cliente.creditos_disponiveis || 0) <= 0,
     canGenerate: check.canGenerate,
     blockReasons: check.reasons
   };
@@ -812,6 +855,36 @@ export function registerAccessControlRoutes(app: express.Express) {
   app.get("/api/plans", async (_req, res) => {
     const sheet = await readSheetStore();
     return res.json({ plans: sheet.planos.filter((p) => (p.ativo || "").toLowerCase() === "sim") });
+  });
+
+  app.post("/api/account/activate-free-once", requireAuth, async (req: AuthenticatedRequest, res) => {
+    const sheet = await readSheetStore();
+    const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
+    if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
+
+    if (hasUsedFreeOnce(cliente)) {
+      return res.status(409).json({ error: "Acesso gratuito inicial ja utilizado nesta conta.", account: buildAccountStatus(cliente) });
+    }
+
+    if (Number(cliente.creditos_disponiveis || 0) > 0 && (cliente.status_conta || "").toLowerCase() === "ativo") {
+      return res.status(409).json({ error: "Conta ja possui creditos/plano ativo.", account: buildAccountStatus(cliente) });
+    }
+
+    ensureFreeOncePlan(sheet);
+    cliente.status_conta = "gratuito";
+    cliente.pagamento_status = "confirmado";
+    cliente.plano_id = FREE_ONCE_PLAN_ID;
+    cliente.creditos_disponiveis = Number(cliente.creditos_disponiveis || 0) + FREE_ONCE_CREDITS;
+    cliente.validade_ate = addDays(nowIso(), FREE_ONCE_VALIDITY_DAYS);
+    appendVoucherMark(cliente, FREE_ONCE_VOUCHER_MARK);
+    cliente.observacao = "Acesso gratuito inicial ativado (uso unico por conta).";
+
+    await writeSheetStore(sheet);
+    return res.json({
+      success: true,
+      message: `Acesso gratuito ativado com ${FREE_ONCE_CREDITS} creditos para uma execucao inicial.`,
+      account: buildAccountStatus(cliente)
+    });
   });
 
   app.get("/api/billing/mode", requireAuth, (_req: AuthenticatedRequest, res) => {

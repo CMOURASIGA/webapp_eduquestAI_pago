@@ -48,6 +48,19 @@ async function run() {
     assertCondition(status.status === 200, `Status da conta falhou (${status.status}): ${JSON.stringify(status.body)}`);
     assertCondition(status.body?.statusConta === "aguardando_pagamento", "Status inicial inesperado.");
 
+    const freeOnce = await requestJson(`${base}/api/account/activate-free-once`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assertCondition(freeOnce.status === 200, `Ativacao gratuita falhou (${freeOnce.status}): ${JSON.stringify(freeOnce.body)}`);
+    assertCondition(freeOnce.body?.account?.canGenerate === true, "Conta deveria ficar apta apos acesso gratuito inicial.");
+
+    const freeOnceAgain = await requestJson(`${base}/api/account/activate-free-once`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assertCondition(freeOnceAgain.status === 409, `Segunda ativacao gratuita deveria falhar com 409: ${JSON.stringify(freeOnceAgain.body)}`);
+
     const plans = await requestJson(`${base}/api/plans`);
     assertCondition(plans.status === 200, `Listagem de planos falhou (${plans.status}): ${JSON.stringify(plans.body)}`);
     assertCondition(Array.isArray(plans.body?.plans) && plans.body.plans.length > 0, "Nenhum plano retornado.");
@@ -70,6 +83,8 @@ async function run() {
       registerStatus: register.status,
       loginStatus: login.status,
       accountStatus: status.body?.statusConta,
+      freeOnceStatus: freeOnce.status,
+      freeOnceSecondTryStatus: freeOnceAgain.status,
       plansCount: plans.body?.plans?.length || 0,
       checkoutStatus: checkout.status,
       checkoutValor: checkout.body?.checkout?.valor,
@@ -85,4 +100,3 @@ run().catch((err) => {
   console.error(err?.message || err);
   process.exit(1);
 });
-

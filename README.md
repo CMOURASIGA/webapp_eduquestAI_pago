@@ -26,8 +26,9 @@ View your app in AI Studio: https://ai.studio/apps/b94c65fb-edc5-49b7-a2f7-e9153
 - `PIX_PAYMENT_KEY` definido: checkout entra em modo real manual (`pix_manual`) e exibe chave PIX + identificador do pagamento.
 - `PIX_PAYMENT_KEY` vazio: checkout permanece em modo teste com simulacao local.
 - A liberacao de conta continua manual, respeitando `MIN_MANUAL_RELEASE_HOURS` (padrao: `1`).
+- Acesso gratuito inicial: cada conta pode ativar uma unica vez (`FREE_ONCE_*`) para 1 execucao inicial.
 
 ## Smoke test operacional
 
-- Execute `npm run test:smoke-billing` para validar: cadastro, login, status da conta, listagem de planos e criacao de checkout.
+- Execute `npm run test:smoke-billing` para validar: cadastro, login, ativacao gratuita unica, listagem de planos e criacao de checkout.
 - Em ambiente com Google Sheets ativo, o backend usa as abas `auth_users` e `auth_sessions` para persistir login/sessao (evita perda de login por reinicio no Vercel).

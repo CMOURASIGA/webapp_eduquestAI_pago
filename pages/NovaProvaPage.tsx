@@ -9,7 +9,7 @@ import { generateExamWithGemini } from '../services/geminiService';
 import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
 import { extractTextFromImage } from '../services/ocrService';
-import { createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
+import { activateFreeOnce, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, Target, FileText, AlertTriangle } from 'lucide-react';
@@ -38,7 +38,18 @@ export const NovaProvaPage: React.FC = () => {
     nivelDificuldade: 'media' as 'baixa' | 'media' | 'alta'
   });
 
+  const isSessionError = (message?: string) => {
+    const m = (message || '').toLowerCase();
+    return m.includes('sessao invalida') || m.includes('sessão inválida') || m.includes('token ausente');
+  };
+
+  const forceRelogin = async () => {
+    setError('Sessao invalida ou expirada. Faca login novamente.');
+    await logout();
+  };
+
   const availableSubjects = getSubjectsForSerie(formData.serie);
+  const paidPlans = plans.filter((p: any) => Number(p?.valor || 0) > 0);
 
   useEffect(() => {
     if (!availableSubjects.includes(formData.disciplina)) {
@@ -49,8 +60,9 @@ export const NovaProvaPage: React.FC = () => {
   useEffect(() => {
     fetchPlans().then((list) => {
       setPlans(list);
-      if (list?.length > 0 && !list.find((p: any) => p.plano_id === selectedPlanId)) {
-        setSelectedPlanId(list[0].plano_id);
+      const paid = (list || []).filter((p: any) => Number(p?.valor || 0) > 0);
+      if (paid.length > 0 && !paid.find((p: any) => p.plano_id === selectedPlanId)) {
+        setSelectedPlanId(paid[0].plano_id);
       }
     }).catch(() => {});
   }, []);
@@ -135,8 +147,27 @@ export const NovaProvaPage: React.FC = () => {
     }
   };
 
-  const handleCreateCheckout = async () => {
+  const handleActivateFreeOnce = async () => {
     if (!authToken) return;
+    setBillingLoading(true);
+    setError(null);
+    try {
+      const data = await activateFreeOnce(authToken);
+      setReleaseNotice(data.message || 'Acesso gratuito inicial ativado para uma unica execucao.');
+      await refreshAccountStatus();
+    } catch (err: any) {
+      if (isSessionError(err?.message)) {
+        await forceRelogin();
+      } else {
+        setError(err.message || 'Falha ao ativar acesso gratuito.');
+      }
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const handleCreateCheckout = async () => {
+    if (!authToken || !selectedPlanId) return;
     setBillingLoading(true);
     setError(null);
     try {
@@ -179,7 +210,7 @@ export const NovaProvaPage: React.FC = () => {
       if (isSessionError(err?.message)) {
         await forceRelogin();
       } else {
-        setError(err.message || 'Falha ao simular pagamento.');
+        setError(err.message || 'Falha ao registrar pagamento.');
       }
     } finally {
       setBillingLoading(false);
@@ -244,6 +275,9 @@ export const NovaProvaPage: React.FC = () => {
             <div className="text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-3">
               Pagamentos sao validados manualmente. A liberacao da conta pode levar no minimo 1 hora apos o pagamento.
             </div>
+            <div className="text-xs rounded-xl border border-sky-200 bg-sky-50 text-sky-800 p-3">
+              Cada conta pode ativar acesso gratuito inicial uma unica vez, para uma execucao. Depois disso, apenas contratando um plano.
+            </div>
             {releaseNotice && (
               <div className="text-xs rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 p-3">
                 {releaseNotice}
@@ -251,20 +285,40 @@ export const NovaProvaPage: React.FC = () => {
             )}
 
             <div className="pt-2 border-t border-slate-100 space-y-2">
-              <label className="block text-xs font-black uppercase text-slate-500">
-                {billingMode === 'pix_manual' ? 'Plano para pagamento real (PIX)' : 'Plano para teste local'}
-              </label>
-              <select
-                value={selectedPlanId}
-                onChange={(e) => setSelectedPlanId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+              <Button
+                type="button"
+                onClick={handleActivateFreeOnce}
+                isLoading={billingLoading}
+                variant="outline"
+                disabled={!accountStatus?.canActivateFreeOnce}
               >
-                {plans.map((p: any) => (
-                  <option key={p.plano_id} value={p.plano_id}>{p.plano_id} - R$ {Number(p.valor || 0).toFixed(2)}</option>
-                ))}
-              </select>
-              <Button type="button" onClick={handleCreateCheckout} isLoading={billingLoading} variant="outline">
-                {billingMode === 'pix_manual' ? 'Gerar dados para pagamento PIX' : 'Criar checkout de teste'}
+                Ativar acesso gratuito inicial (1 execucao)
+              </Button>
+
+              <label className="block text-xs font-black uppercase text-slate-500">
+                Plano para contratacao
+              </label>
+              {paidPlans.length > 0 ? (
+                <select
+                  value={selectedPlanId}
+                  onChange={(e) => setSelectedPlanId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                >
+                  {paidPlans.map((p: any) => (
+                    <option key={p.plano_id} value={p.plano_id}>{p.plano_id} - R$ {Number(p.valor || 0).toFixed(2)}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-slate-500">Nenhum plano pago disponivel.</p>
+              )}
+              <Button
+                type="button"
+                onClick={handleCreateCheckout}
+                isLoading={billingLoading}
+                variant="outline"
+                disabled={paidPlans.length === 0}
+              >
+                Gerar pagamento PIX do plano
               </Button>
               {lastCheckout?.pix && (
                 <div className="text-xs rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 space-y-2">
@@ -282,9 +336,12 @@ export const NovaProvaPage: React.FC = () => {
                 </div>
               )}
               {simulationEnabled && (
-                <Button type="button" onClick={handleSimulatePayment} isLoading={billingLoading} variant="outline" disabled={!lastCheckout}>
-                  Simular pagamento confirmado
-                </Button>
+                <div className="space-y-2">
+                  <div className="text-[11px] text-slate-500">Somente homologacao: registrar pagamento manual sem gateway.</div>
+                  <Button type="button" onClick={handleSimulatePayment} isLoading={billingLoading} variant="outline" disabled={!lastCheckout}>
+                    Registrar pagamento manual (homologacao)
+                  </Button>
+                </div>
               )}
             </div>
           </section>
@@ -341,12 +398,3 @@ export const NovaProvaPage: React.FC = () => {
     </div>
   );
 };
-  const isSessionError = (message?: string) => {
-    const m = (message || '').toLowerCase();
-    return m.includes('sessao invalida') || m.includes('sessão inválida') || m.includes('token ausente');
-  };
-
-  const forceRelogin = async () => {
-    setError('Sessao invalida ou expirada. Faca login novamente.');
-    await logout();
-  };
