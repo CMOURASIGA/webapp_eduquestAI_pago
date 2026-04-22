@@ -25,6 +25,7 @@ export const NovaProvaPage: React.FC = () => {
   const [billingLoading, setBillingLoading] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState('PRE100');
   const [lastCheckout, setLastCheckout] = useState<any | null>(null);
+  const [releaseNotice, setReleaseNotice] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -125,6 +126,7 @@ export const NovaProvaPage: React.FC = () => {
     try {
       const data = await createCheckout(authToken, selectedPlanId);
       setLastCheckout(data.checkout);
+      setReleaseNotice(data.releaseNotice || 'Pagamento recebido entra em analise manual. Prazo minimo para liberacao: 1 hora.');
     } catch (err: any) {
       setError(err.message || 'Falha ao criar checkout.');
     } finally {
@@ -148,6 +150,7 @@ export const NovaProvaPage: React.FC = () => {
       if (!response.ok) throw new Error(data.error || data.details || 'Falha no webhook');
       await refreshAccountStatus();
       setLastCheckout(null);
+      setReleaseNotice(null);
     } catch (err: any) {
       setError(err.message || 'Falha ao simular pagamento.');
     } finally {
@@ -210,6 +213,14 @@ export const NovaProvaPage: React.FC = () => {
               <p><strong>Creditos:</strong> {accountStatus?.creditosDisponiveis ?? 0}</p>
               <p><strong>Pode gerar:</strong> {accountStatus?.canGenerate ? 'Sim' : 'Nao'}</p>
             </div>
+            <div className="text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-3">
+              Pagamentos sao validados manualmente. A liberacao da conta pode levar no minimo 1 hora apos o pagamento.
+            </div>
+            {releaseNotice && (
+              <div className="text-xs rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 p-3">
+                {releaseNotice}
+              </div>
+            )}
 
             <div className="pt-2 border-t border-slate-100 space-y-2">
               <label className="block text-xs font-black uppercase text-slate-500">Plano para teste local</label>

@@ -119,6 +119,7 @@ const AUTH_PATH = path.join(LOGS_DIR, "authStore.json");
 const SHEET_PATH = path.join(LOGS_DIR, "sheetStore.json");
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
 const CREDITS_PER_QUESTION = Number(process.env.CREDITS_PER_QUESTION || 1);
+const MIN_MANUAL_RELEASE_HOURS = Number(process.env.MIN_MANUAL_RELEASE_HOURS || 1);
 
 function ensureDir() {
   if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -335,7 +336,7 @@ function canGenerateFromCliente(cliente: ClienteRow) {
 
   if ((cliente.pagamento_status || "").toLowerCase() === "pendente") {
     canGenerate = false;
-    reasons.push("Pagamento pendente.");
+    reasons.push(`Pagamento em analise manual. A liberacao pode levar no minimo ${MIN_MANUAL_RELEASE_HOURS} hora(s).`);
   }
 
   return { canGenerate, reasons };
@@ -532,11 +533,12 @@ export function registerAccessControlRoutes(app: express.Express) {
     cliente.plano_id = plano.plano_id;
     cliente.pagamento_status = "pendente";
     cliente.status_conta = "aguardando_pagamento";
-    cliente.observacao = "Checkout criado, aguardando webhook";
+    cliente.observacao = `Checkout criado. Liberacao manual em ate ${MIN_MANUAL_RELEASE_HOURS} hora(s).`;
     writeSheetStore(sheet);
 
     return res.json({
       success: true,
+      releaseNotice: `Pagamento recebido entra em analise manual. Prazo minimo para liberacao: ${MIN_MANUAL_RELEASE_HOURS} hora(s).`,
       checkout: {
         planoId: plano.plano_id,
         pagamentoId: payment.pagamento_id,
