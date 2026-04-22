@@ -20,6 +20,8 @@ dotenv.config();
 
 export const app = express();
 const PORT = 3000;
+const WRITABLE_ROOT = process.env.VERCEL ? "/tmp" : process.cwd();
+const LOGS_DIR = path.resolve(WRITABLE_ROOT, "logs");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -60,7 +62,7 @@ registerAccessControlRoutes(app);
 function appendLog(entry: any) {
   try {
     const logEntry = `[${new Date().toISOString()}] ${JSON.stringify(entry)}\n`;
-    const logPath = path.resolve(process.cwd(), "logs", "examGeneration.log");
+    const logPath = path.resolve(LOGS_DIR, "examGeneration.log");
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.appendFileSync(logPath, logEntry, { encoding: "utf8" });
   } catch (e) {
@@ -68,7 +70,7 @@ function appendLog(entry: any) {
   }
 }
 
-const answersFile = path.resolve(process.cwd(), "logs", "studentAnswers.json");
+const answersFile = path.resolve(LOGS_DIR, "studentAnswers.json");
 function readAnswers() {
   try {
     if (!fs.existsSync(answersFile)) return [];

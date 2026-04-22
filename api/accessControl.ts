@@ -115,7 +115,8 @@ interface AuthStore {
   sessions: Session[];
 }
 
-const LOGS_DIR = path.resolve(process.cwd(), "logs");
+const WRITABLE_ROOT = process.env.VERCEL ? "/tmp" : process.cwd();
+const LOGS_DIR = path.resolve(WRITABLE_ROOT, "logs");
 const AUTH_PATH = path.join(LOGS_DIR, "authStore.json");
 const SHEET_PATH = path.join(LOGS_DIR, "sheetStore.json");
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
