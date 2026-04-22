@@ -196,10 +196,29 @@ function writeJson(filePath: string, data: any) {
 }
 
 function toNumber(v: any, fallback = 0) {
+  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
   if (typeof v === "string") {
     const raw = v.trim();
     if (!raw) return fallback;
-    const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+    const compact = raw
+      .replace(/\s+/g, "")
+      .replace(/^R\$/i, "")
+      .replace(/[^\d,.\-]/g, "");
+
+    const hasComma = compact.includes(",");
+    const hasDot = compact.includes(".");
+    let normalized = compact;
+
+    if (hasComma && hasDot) {
+      const commaPos = compact.lastIndexOf(",");
+      const dotPos = compact.lastIndexOf(".");
+      normalized = commaPos > dotPos
+        ? compact.replace(/\./g, "").replace(",", ".")
+        : compact.replace(/,/g, "");
+    } else if (hasComma) {
+      normalized = compact.replace(",", ".");
+    }
+
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -311,6 +330,7 @@ async function readTab(tabName: string, headers: string[]) {
   const response = await client.spreadsheets.values.get({
     spreadsheetId: GOOGLE_SHEET_ID,
     range: `${tabName}!A1:ZZ`,
+    valueRenderOption: "UNFORMATTED_VALUE",
   });
   const values = response.data.values || [];
   if (values.length === 0) return [] as Record<string, any>[];
