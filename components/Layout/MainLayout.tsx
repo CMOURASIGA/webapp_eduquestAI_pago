@@ -12,7 +12,8 @@ import {
   UserCircle,
   HelpCircle,
   LogOut,
-  Settings
+  Settings,
+  Wallet
 } from 'lucide-react';
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -24,6 +25,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
   const navItems = [
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Nova Prova', path: '/nova-prova', icon: PlusCircle, professorOnly: true },
+    { label: 'Planos', path: '/planos', icon: Wallet },
     { label: 'Provas Salvas', path: '/provas', icon: FileText },
     { label: 'Instruções', path: '/instrucoes', icon: HelpCircle, professorOnly: true },
     { label: 'Configurações', path: '/config-gemini', icon: Settings, professorOnly: true },
