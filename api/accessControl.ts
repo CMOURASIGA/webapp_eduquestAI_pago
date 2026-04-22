@@ -230,6 +230,26 @@ function toNumber(v: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeDateValue(v: any) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const millis = Math.round((v - 25569) * 86400 * 1000);
+    const d = new Date(millis);
+    if (Number.isFinite(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const raw = String(v).trim();
+  if (!raw) return "";
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const asNum = Number(raw);
+    if (Number.isFinite(asNum)) {
+      const millis = Math.round((asNum - 25569) * 86400 * 1000);
+      const d = new Date(millis);
+      if (Number.isFinite(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+  }
+  return raw;
+}
+
 function defaultSheetData(): SheetData {
   return {
     clientes: [],
@@ -385,11 +405,11 @@ async function readSheetStoreGoogle(): Promise<SheetData> {
       serie_contratada: String(r.serie_contratada || ""),
       creditos_disponiveis: toNumber(r.creditos_disponiveis),
       creditos_utilizados: toNumber(r.creditos_utilizados),
-      validade_ate: String(r.validade_ate || ""),
+      validade_ate: normalizeDateValue(r.validade_ate),
       pagamento_status: String(r.pagamento_status || ""),
       voucher_codigo: String(r.voucher_codigo || ""),
-      data_cadastro: String(r.data_cadastro || ""),
-      data_ultimo_pagamento: String(r.data_ultimo_pagamento || ""),
+      data_cadastro: normalizeDateValue(r.data_cadastro),
+      data_ultimo_pagamento: normalizeDateValue(r.data_ultimo_pagamento),
       observacao: String(r.observacao || ""),
     })),
     planos: planosRaw.map((r) => ({
@@ -414,8 +434,8 @@ async function readSheetStoreGoogle(): Promise<SheetData> {
       plano_id: String(r.plano_id || ""),
       valor: toNumber(r.valor),
       status: String(r.status || ""),
-      data_criacao: String(r.data_criacao || ""),
-      data_confirmacao: String(r.data_confirmacao || ""),
+      data_criacao: normalizeDateValue(r.data_criacao),
+      data_confirmacao: normalizeDateValue(r.data_confirmacao),
       origem: String(r.origem || ""),
       descricao: String(r.descricao || ""),
     })),
@@ -423,7 +443,7 @@ async function readSheetStoreGoogle(): Promise<SheetData> {
       consumo_id: String(r.consumo_id || ""),
       cliente_id: String(r.cliente_id || ""),
       email: String(r.email || ""),
-      data_hora: String(r.data_hora || ""),
+      data_hora: normalizeDateValue(r.data_hora),
       tipo_geracao: String(r.tipo_geracao || ""),
       quantidade_questoes: toNumber(r.quantidade_questoes),
       creditos_consumidos: toNumber(r.creditos_consumidos),
@@ -444,7 +464,7 @@ async function readSheetStoreGoogle(): Promise<SheetData> {
       gratuidade_total: String(r.gratuidade_total || ""),
       limite_uso: toNumber(r.limite_uso),
       usos_realizados: toNumber(r.usos_realizados),
-      validade_ate: String(r.validade_ate || ""),
+      validade_ate: normalizeDateValue(r.validade_ate),
       ativo: String(r.ativo || ""),
       observacao: String(r.observacao || ""),
     })),
