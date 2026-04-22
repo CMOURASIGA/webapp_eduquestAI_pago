@@ -531,6 +531,38 @@ function readSheetStoreLocal(): SheetData {
   if (!data.pagamentos) data.pagamentos = [];
   if (!data.consumo) data.consumo = [];
   if (!data.vouchers) data.vouchers = [];
+
+  data.clientes = data.clientes.map((c) => ({
+    ...c,
+    creditos_disponiveis: toNumber((c as any).creditos_disponiveis),
+    creditos_utilizados: toNumber((c as any).creditos_utilizados),
+    validade_ate: normalizeDateValue((c as any).validade_ate),
+    data_cadastro: normalizeDateValue((c as any).data_cadastro),
+    data_ultimo_pagamento: normalizeDateValue((c as any).data_ultimo_pagamento),
+  }));
+  data.planos = data.planos.map((p) => ({
+    ...p,
+    valor: toNumber((p as any).valor),
+    creditos_inclusos: toNumber((p as any).creditos_inclusos),
+    validade_dias: toNumber((p as any).validade_dias),
+    franquia_mensal: toNumber((p as any).franquia_mensal),
+  }));
+  data.pagamentos = data.pagamentos.map((p) => ({
+    ...p,
+    valor: toNumber((p as any).valor),
+    data_criacao: normalizeDateValue((p as any).data_criacao),
+    data_confirmacao: normalizeDateValue((p as any).data_confirmacao),
+  }));
+  data.vouchers = data.vouchers.map((v) => ({
+    ...v,
+    valor_desconto: toNumber((v as any).valor_desconto),
+    percentual_desconto: toNumber((v as any).percentual_desconto),
+    creditos_bonus: toNumber((v as any).creditos_bonus),
+    limite_uso: toNumber((v as any).limite_uso),
+    usos_realizados: toNumber((v as any).usos_realizados),
+    validade_ate: normalizeDateValue((v as any).validade_ate),
+  }));
+
   writeJson(SHEET_PATH, data);
   return data;
 }
