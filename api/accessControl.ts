@@ -122,6 +122,9 @@ const SHEET_PATH = path.join(LOGS_DIR, "sheetStore.json");
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
 const CREDITS_PER_QUESTION = Number(process.env.CREDITS_PER_QUESTION || 1);
 const MIN_MANUAL_RELEASE_HOURS = Number(process.env.MIN_MANUAL_RELEASE_HOURS || 1);
+const PIX_PAYMENT_KEY = (process.env.PIX_PAYMENT_KEY || "").trim();
+const PIX_PAYMENT_RECIPIENT = (process.env.PIX_PAYMENT_RECIPIENT || "EduQuest IA").trim();
+const BILLING_MODE = PIX_PAYMENT_KEY ? "pix_manual" : "teste";
 
 const GOOGLE_SHEET_ID = (process.env.GOOGLE_SHEET_ID || "").trim();
 const GOOGLE_SERVICE_ACCOUNT_JSON = (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim();
@@ -679,6 +682,14 @@ export function registerAccessControlRoutes(app: express.Express) {
     return res.json({ plans: sheet.planos.filter((p) => (p.ativo || "").toLowerCase() === "sim") });
   });
 
+  app.get("/api/billing/mode", requireAuth, (_req: AuthenticatedRequest, res) => {
+    return res.json({
+      mode: BILLING_MODE,
+      simulationEnabled: BILLING_MODE === "teste",
+      minReleaseHours: MIN_MANUAL_RELEASE_HOURS
+    });
+  });
+
   app.post("/api/billing/create-checkout", requireAuth, async (req: AuthenticatedRequest, res) => {
     const { planoId } = req.body || {};
     if (!planoId) return res.status(400).json({ error: "Campo obrigatorio: planoId." });
@@ -701,8 +712,10 @@ export function registerAccessControlRoutes(app: express.Express) {
       status: "pendente",
       data_criacao: nowIso(),
       data_confirmacao: "",
-      origem: "local_checkout",
-      descricao: `Checkout local para plano ${plano.plano_id}`
+      origem: BILLING_MODE === "pix_manual" ? "pix_manual" : "local_checkout",
+      descricao: BILLING_MODE === "pix_manual"
+        ? `Pagamento PIX manual para plano ${plano.plano_id}`
+        : `Checkout local para plano ${plano.plano_id}`
     };
     sheet.pagamentos.push(payment);
 
@@ -716,12 +729,25 @@ export function registerAccessControlRoutes(app: express.Express) {
     return res.json({
       success: true,
       releaseNotice: `Pagamento recebido entra em analise manual. Prazo minimo para liberacao: ${MIN_MANUAL_RELEASE_HOURS} hora(s).`,
+      billingMode: BILLING_MODE,
       checkout: {
         planoId: plano.plano_id,
         pagamentoId: payment.pagamento_id,
         asaasPaymentId: payment.asaas_payment_id,
         valor: payment.valor,
-        checkoutUrl: `/billing/mock-checkout?pagamento_id=${payment.pagamento_id}`
+        checkoutUrl: `/billing/mock-checkout?pagamento_id=${payment.pagamento_id}`,
+        simulationEnabled: BILLING_MODE === "teste",
+        pix: BILLING_MODE === "pix_manual" ? {
+          chave: PIX_PAYMENT_KEY,
+          favorecido: PIX_PAYMENT_RECIPIENT,
+          identificador: payment.pagamento_id,
+          valor: payment.valor,
+          instrucoes: [
+            `Realize um PIX no valor de R$ ${Number(payment.valor || 0).toFixed(2)} usando a chave informada.`,
+            `No comprovante, informe o identificador ${payment.pagamento_id}.`,
+            `A liberacao ocorre manualmente em ate ${MIN_MANUAL_RELEASE_HOURS} hora(s) apos a confirmacao do pagamento.`
+          ]
+        } : null
       }
     });
   });

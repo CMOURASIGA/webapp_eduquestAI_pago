@@ -9,7 +9,7 @@ import { generateExamWithGemini } from '../services/geminiService';
 import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
 import { extractTextFromImage } from '../services/ocrService';
-import { createCheckout, fetchPlans } from '../services/authService';
+import { createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, Target, FileText, AlertTriangle } from 'lucide-react';
@@ -26,6 +26,8 @@ export const NovaProvaPage: React.FC = () => {
   const [selectedPlanId, setSelectedPlanId] = useState('PRE100');
   const [lastCheckout, setLastCheckout] = useState<any | null>(null);
   const [releaseNotice, setReleaseNotice] = useState<string | null>(null);
+  const [billingMode, setBillingMode] = useState<'pix_manual' | 'teste'>('teste');
+  const [simulationEnabled, setSimulationEnabled] = useState(true);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -52,6 +54,14 @@ export const NovaProvaPage: React.FC = () => {
       }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!authToken) return;
+    fetchBillingMode(authToken).then((cfg) => {
+      setBillingMode(cfg.mode);
+      setSimulationEnabled(Boolean(cfg.simulationEnabled));
+    }).catch(() => {});
+  }, [authToken]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,6 +137,10 @@ export const NovaProvaPage: React.FC = () => {
       const data = await createCheckout(authToken, selectedPlanId);
       setLastCheckout(data.checkout);
       setReleaseNotice(data.releaseNotice || 'Pagamento recebido entra em analise manual. Prazo minimo para liberacao: 1 hora.');
+      if (data.billingMode) {
+        setBillingMode(data.billingMode);
+        setSimulationEnabled(Boolean(data.checkout?.simulationEnabled));
+      }
     } catch (err: any) {
       setError(err.message || 'Falha ao criar checkout.');
     } finally {
@@ -223,7 +237,9 @@ export const NovaProvaPage: React.FC = () => {
             )}
 
             <div className="pt-2 border-t border-slate-100 space-y-2">
-              <label className="block text-xs font-black uppercase text-slate-500">Plano para teste local</label>
+              <label className="block text-xs font-black uppercase text-slate-500">
+                {billingMode === 'pix_manual' ? 'Plano para pagamento real (PIX)' : 'Plano para teste local'}
+              </label>
               <select
                 value={selectedPlanId}
                 onChange={(e) => setSelectedPlanId(e.target.value)}
@@ -233,8 +249,29 @@ export const NovaProvaPage: React.FC = () => {
                   <option key={p.plano_id} value={p.plano_id}>{p.plano_id} - R$ {Number(p.valor || 0).toFixed(2)}</option>
                 ))}
               </select>
-              <Button type="button" onClick={handleCreateCheckout} isLoading={billingLoading} variant="outline">Criar checkout de teste</Button>
-              <Button type="button" onClick={handleSimulatePayment} isLoading={billingLoading} variant="outline" disabled={!lastCheckout}>Simular pagamento confirmado</Button>
+              <Button type="button" onClick={handleCreateCheckout} isLoading={billingLoading} variant="outline">
+                {billingMode === 'pix_manual' ? 'Gerar dados para pagamento PIX' : 'Criar checkout de teste'}
+              </Button>
+              {lastCheckout?.pix && (
+                <div className="text-xs rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 space-y-2">
+                  <p><strong>Valor:</strong> R$ {Number(lastCheckout?.pix?.valor || 0).toFixed(2)}</p>
+                  <p><strong>Chave PIX:</strong> {lastCheckout?.pix?.chave}</p>
+                  <p><strong>Favorecido:</strong> {lastCheckout?.pix?.favorecido}</p>
+                  <p><strong>Identificador:</strong> {lastCheckout?.pix?.identificador}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigator.clipboard?.writeText(lastCheckout?.pix?.chave || '')}
+                  >
+                    Copiar chave PIX
+                  </Button>
+                </div>
+              )}
+              {simulationEnabled && (
+                <Button type="button" onClick={handleSimulatePayment} isLoading={billingLoading} variant="outline" disabled={!lastCheckout}>
+                  Simular pagamento confirmado
+                </Button>
+              )}
             </div>
           </section>
 

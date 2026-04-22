@@ -117,3 +117,16 @@ export async function createCheckout(token: string, planoId: string) {
   return data;
 }
 
+export async function fetchBillingMode(token: string) {
+  const response = await fetch("/api/billing/mode", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao consultar modo de cobranca.");
+  return data as {
+    mode: "pix_manual" | "teste";
+    simulationEnabled: boolean;
+    minReleaseHours: number;
+  };
+}
+

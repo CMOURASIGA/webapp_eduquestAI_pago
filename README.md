@@ -20,3 +20,9 @@ View your app in AI Studio: https://ai.studio/apps/b94c65fb-edc5-49b7-a2f7-e9153
    - `API_KEY` → chave do Gemini usada no frontend
 3. Run the app:
    `npm run dev`
+
+## Billing mode (manual PIX)
+
+- `PIX_PAYMENT_KEY` definido: checkout entra em modo real manual (`pix_manual`) e exibe chave PIX + identificador do pagamento.
+- `PIX_PAYMENT_KEY` vazio: checkout permanece em modo teste com simulacao local.
+- A liberacao de conta continua manual, respeitando `MIN_MANUAL_RELEASE_HOURS` (padrao: `1`).
