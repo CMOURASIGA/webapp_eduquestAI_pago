@@ -141,6 +141,12 @@ const PAGAMENTOS_HEADERS = [
   "pagamento_id", "cliente_id", "email", "asaas_customer_id", "asaas_payment_id", "asaas_subscription_id", "plano_id",
   "valor", "status", "data_criacao", "data_confirmacao", "origem", "descricao"
 ];
+const AUTH_USERS_HEADERS = [
+  "id", "name", "email", "role", "password_hash", "password_salt", "created_at"
+];
+const AUTH_SESSIONS_HEADERS = [
+  "token", "user_id", "created_at", "expires_at"
+];
 const CONSUMO_HEADERS = [
   "consumo_id", "cliente_id", "email", "data_hora", "tipo_geracao", "quantidade_questoes", "creditos_consumidos", "modelo_ia",
   "tokens_input", "tokens_output", "custo_estimado", "status_execucao", "referencia"
@@ -190,6 +196,13 @@ function writeJson(filePath: string, data: any) {
 }
 
 function toNumber(v: any, fallback = 0) {
+  if (typeof v === "string") {
+    const raw = v.trim();
+    if (!raw) return fallback;
+    const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -211,14 +224,12 @@ function defaultSheetData(): SheetData {
   };
 }
 
-function readAuthStore(): AuthStore {
+function readAuthStoreLocal(): AuthStore {
   const data = readJson<AuthStore>(AUTH_PATH, { users: [], sessions: [] });
-  data.sessions = data.sessions.filter((s) => new Date(s.expiresAt).getTime() > Date.now());
-  writeJson(AUTH_PATH, data);
   return data;
 }
 
-function writeAuthStore(data: AuthStore) {
+function writeAuthStoreLocal(data: AuthStore) {
   writeJson(AUTH_PATH, data);
 }
 
@@ -259,6 +270,29 @@ function getSheetsClient() {
   return sheetsClient;
 }
 
+async function ensureTabsExist(tabNames: string[]) {
+  const client = getSheetsClient();
+  const spreadsheet = await client.spreadsheets.get({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    fields: "sheets.properties.title",
+  });
+  const existing = new Set(
+    (spreadsheet.data.sheets || [])
+      .map((s: any) => String(s?.properties?.title || ""))
+      .filter(Boolean)
+  );
+
+  const missing = tabNames.filter((t) => !existing.has(t));
+  if (missing.length === 0) return;
+
+  await client.spreadsheets.batchUpdate({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    requestBody: {
+      requests: missing.map((title) => ({ addSheet: { properties: { title } } })),
+    },
+  });
+}
+
 function rowToObj(headers: string[], row: any[]): Record<string, any> {
   const obj: Record<string, any> = {};
   headers.forEach((h, i) => {
@@ -272,6 +306,7 @@ function objToRow(headers: string[], obj: Record<string, any>) {
 }
 
 async function readTab(tabName: string, headers: string[]) {
+  await ensureTabsExist([tabName]);
   const client = getSheetsClient();
   const response = await client.spreadsheets.values.get({
     spreadsheetId: GOOGLE_SHEET_ID,
@@ -289,6 +324,7 @@ async function readTab(tabName: string, headers: string[]) {
 }
 
 async function writeTab(tabName: string, headers: string[], rows: Record<string, any>[]) {
+  await ensureTabsExist([tabName]);
   const client = getSheetsClient();
 
   await client.spreadsheets.values.clear({
@@ -401,6 +437,48 @@ async function writeSheetStoreGoogle(data: SheetData) {
   await writeTab("vouchers", VOUCHERS_HEADERS, data.vouchers as any[]);
 }
 
+async function readAuthStoreGoogle(): Promise<AuthStore> {
+  const usersRaw = await readTab("auth_users", AUTH_USERS_HEADERS);
+  const sessionsRaw = await readTab("auth_sessions", AUTH_SESSIONS_HEADERS);
+
+  return {
+    users: usersRaw.map((r) => ({
+      id: String(r.id || ""),
+      name: String(r.name || ""),
+      email: String(r.email || "").toLowerCase(),
+      role: String(r.role || "").toLowerCase() === "aluno" ? "aluno" : "professor",
+      passwordHash: String(r.password_hash || ""),
+      passwordSalt: String(r.password_salt || ""),
+      createdAt: String(r.created_at || ""),
+    })),
+    sessions: sessionsRaw.map((r) => ({
+      token: String(r.token || ""),
+      userId: String(r.user_id || ""),
+      createdAt: String(r.created_at || ""),
+      expiresAt: String(r.expires_at || ""),
+    })),
+  };
+}
+
+async function writeAuthStoreGoogle(data: AuthStore) {
+  await writeTab("auth_users", AUTH_USERS_HEADERS, data.users.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    password_hash: u.passwordHash,
+    password_salt: u.passwordSalt,
+    created_at: u.createdAt,
+  })));
+
+  await writeTab("auth_sessions", AUTH_SESSIONS_HEADERS, data.sessions.map((s) => ({
+    token: s.token,
+    user_id: s.userId,
+    created_at: s.createdAt,
+    expires_at: s.expiresAt,
+  })));
+}
+
 function readSheetStoreLocal(): SheetData {
   const data = readJson<SheetData>(SHEET_PATH, defaultSheetData());
   if (!data.planos || data.planos.length === 0) data.planos = defaultSheetData().planos;
@@ -436,6 +514,40 @@ async function writeSheetStore(data: SheetData) {
   } catch (e) {
     console.error("Falha ao gravar Google Sheets. Gravando fallback local:", e);
     writeSheetStoreLocal(data);
+  }
+}
+
+async function readAuthStore(): Promise<AuthStore> {
+  let data: AuthStore;
+  if (!canUseGoogleSheets()) {
+    data = readAuthStoreLocal();
+  } else {
+    try {
+      data = await readAuthStoreGoogle();
+    } catch (e) {
+      console.error("Falha ao ler auth no Google Sheets. Usando fallback local:", e);
+      data = readAuthStoreLocal();
+    }
+  }
+
+  const filtered = data.sessions.filter((s) => new Date(s.expiresAt).getTime() > Date.now());
+  if (filtered.length !== data.sessions.length) {
+    data.sessions = filtered;
+    await writeAuthStore(data);
+  }
+  return data;
+}
+
+async function writeAuthStore(data: AuthStore) {
+  if (!canUseGoogleSheets()) {
+    writeAuthStoreLocal(data);
+    return;
+  }
+  try {
+    await writeAuthStoreGoogle(data);
+  } catch (e) {
+    console.error("Falha ao gravar auth no Google Sheets. Gravando fallback local:", e);
+    writeAuthStoreLocal(data);
   }
 }
 
@@ -531,7 +643,7 @@ export interface AuthenticatedRequest extends express.Request {
 export async function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   const token = getToken(req);
   if (!token) return res.status(401).json({ error: "Token ausente." });
-  const auth = readAuthStore();
+  const auth = await readAuthStore();
   const session = auth.sessions.find((s) => s.token === token);
   if (!session) return res.status(401).json({ error: "Sessao invalida ou expirada." });
   const user = auth.users.find((u) => u.id === session.userId);
@@ -589,7 +701,7 @@ export function registerAccessControlRoutes(app: express.Express) {
         return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres." });
       }
       const normalizedEmail = String(email).trim().toLowerCase();
-      const auth = readAuthStore();
+      const auth = await readAuthStore();
       if (auth.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
         return res.status(409).json({ error: "Email ja cadastrado." });
       }
@@ -607,7 +719,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       auth.users.push(user);
       const session = createSession(user.id);
       auth.sessions.push(session);
-      writeAuthStore(auth);
+      await writeAuthStore(auth);
 
       const cliente = await ensureClienteForUser(user);
       return res.json({
@@ -627,7 +739,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       if (!email || !password) {
         return res.status(400).json({ error: "Campos obrigatorios: email, password." });
       }
-      const auth = readAuthStore();
+      const auth = await readAuthStore();
       const user = auth.users.find((u) => u.email.toLowerCase() === String(email).trim().toLowerCase());
       if (!user) return res.status(401).json({ error: "Credenciais invalidas." });
       const currentHash = hashPassword(String(password), user.passwordSalt);
@@ -635,7 +747,7 @@ export function registerAccessControlRoutes(app: express.Express) {
 
       const session = createSession(user.id);
       auth.sessions.push(session);
-      writeAuthStore(auth);
+      await writeAuthStore(auth);
       const cliente = await ensureClienteForUser(user);
       return res.json({
         success: true,
@@ -648,11 +760,11 @@ export function registerAccessControlRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/auth/logout", requireAuth, (req: AuthenticatedRequest, res) => {
+  app.post("/api/auth/logout", requireAuth, async (req: AuthenticatedRequest, res) => {
     const token = getToken(req);
-    const auth = readAuthStore();
+    const auth = await readAuthStore();
     auth.sessions = auth.sessions.filter((s) => s.token !== token);
-    writeAuthStore(auth);
+    await writeAuthStore(auth);
     return res.json({ success: true });
   });
 
