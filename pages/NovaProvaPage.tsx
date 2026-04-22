@@ -15,7 +15,7 @@ import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, Target, FileText, AlertTriangle } from 'lucide-react';
 
 export const NovaProvaPage: React.FC = () => {
-  const { selectedModel, aiProvider, activeApiKey, authToken, accountStatus, refreshAccountStatus } = useGeminiConfig();
+  const { selectedModel, aiProvider, activeApiKey, authToken, accountStatus, refreshAccountStatus, logout } = useGeminiConfig();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -60,7 +60,9 @@ export const NovaProvaPage: React.FC = () => {
     fetchBillingMode(authToken).then((cfg) => {
       setBillingMode(cfg.mode);
       setSimulationEnabled(Boolean(cfg.simulationEnabled));
-    }).catch(() => {});
+    }).catch(async (err: any) => {
+      if (isSessionError(err?.message)) await forceRelogin();
+    });
   }, [authToken]);
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -108,7 +110,11 @@ export const NovaProvaPage: React.FC = () => {
       await refreshAccountStatus();
       navigate(`/provas/${newExam.id}`);
     } catch (err: any) {
-      setError(`Erro ao gerar prova com ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}: ${err.message}`);
+      if (isSessionError(err?.message)) {
+        await forceRelogin();
+      } else {
+        setError(`Erro ao gerar prova com ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}: ${err.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +148,11 @@ export const NovaProvaPage: React.FC = () => {
         setSimulationEnabled(Boolean(data.checkout?.simulationEnabled));
       }
     } catch (err: any) {
-      setError(err.message || 'Falha ao criar checkout.');
+      if (isSessionError(err?.message)) {
+        await forceRelogin();
+      } else {
+        setError(err.message || 'Falha ao criar checkout.');
+      }
     } finally {
       setBillingLoading(false);
     }
@@ -166,7 +176,11 @@ export const NovaProvaPage: React.FC = () => {
       setLastCheckout(null);
       setReleaseNotice(null);
     } catch (err: any) {
-      setError(err.message || 'Falha ao simular pagamento.');
+      if (isSessionError(err?.message)) {
+        await forceRelogin();
+      } else {
+        setError(err.message || 'Falha ao simular pagamento.');
+      }
     } finally {
       setBillingLoading(false);
     }
@@ -327,3 +341,12 @@ export const NovaProvaPage: React.FC = () => {
     </div>
   );
 };
+  const isSessionError = (message?: string) => {
+    const m = (message || '').toLowerCase();
+    return m.includes('sessao invalida') || m.includes('sessão inválida') || m.includes('token ausente');
+  };
+
+  const forceRelogin = async () => {
+    setError('Sessao invalida ou expirada. Faca login novamente.');
+    await logout();
+  };
