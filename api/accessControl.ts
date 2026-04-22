@@ -1,7 +1,8 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import type express from "express";
+import { google } from "googleapis";
 
 type Role = "professor" | "aluno";
 
@@ -121,6 +122,32 @@ const SESSION_DAYS = Number(process.env.SESSION_DAYS || 7);
 const CREDITS_PER_QUESTION = Number(process.env.CREDITS_PER_QUESTION || 1);
 const MIN_MANUAL_RELEASE_HOURS = Number(process.env.MIN_MANUAL_RELEASE_HOURS || 1);
 
+const GOOGLE_SHEET_ID = (process.env.GOOGLE_SHEET_ID || "").trim();
+const GOOGLE_SERVICE_ACCOUNT_JSON = (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim();
+
+const CLIENTES_HEADERS = [
+  "cliente_id", "nome", "email", "telefone", "status_conta", "tipo_acesso", "plano_id", "serie_contratada",
+  "creditos_disponiveis", "creditos_utilizados", "validade_ate", "pagamento_status", "voucher_codigo",
+  "data_cadastro", "data_ultimo_pagamento", "observacao"
+];
+const PLANOS_HEADERS = [
+  "plano_id", "nome_plano", "tipo_plano", "valor", "creditos_inclusos", "validade_dias", "serie", "franquia_mensal", "ativo", "descricao"
+];
+const PAGAMENTOS_HEADERS = [
+  "pagamento_id", "cliente_id", "email", "asaas_customer_id", "asaas_payment_id", "asaas_subscription_id", "plano_id",
+  "valor", "status", "data_criacao", "data_confirmacao", "origem", "descricao"
+];
+const CONSUMO_HEADERS = [
+  "consumo_id", "cliente_id", "email", "data_hora", "tipo_geracao", "quantidade_questoes", "creditos_consumidos", "modelo_ia",
+  "tokens_input", "tokens_output", "custo_estimado", "status_execucao", "referencia"
+];
+const VOUCHERS_HEADERS = [
+  "voucher_id", "codigo", "tipo", "valor_desconto", "percentual_desconto", "creditos_bonus", "gratuidade_total",
+  "limite_uso", "usos_realizados", "validade_ate", "ativo", "observacao"
+];
+
+let sheetsClient: ReturnType<typeof google.sheets> | null = null;
+
 function ensureDir() {
   if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
 }
@@ -158,76 +185,24 @@ function writeJson(filePath: string, data: any) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
 }
 
+function toNumber(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function defaultSheetData(): SheetData {
   return {
     clientes: [],
     planos: [
-      {
-        plano_id: "PRE100",
-        nome_plano: "Pacote 100 questoes",
-        tipo_plano: "prepago",
-        valor: 29.9,
-        creditos_inclusos: 100,
-        validade_dias: 365,
-        serie: "geral",
-        franquia_mensal: 0,
-        ativo: "sim",
-        descricao: "Pacote pre-pago com validade de 12 meses"
-      },
-      {
-        plano_id: "PRE300",
-        nome_plano: "Pacote 300 questoes",
-        tipo_plano: "prepago",
-        valor: 69.9,
-        creditos_inclusos: 300,
-        validade_dias: 365,
-        serie: "geral",
-        franquia_mensal: 0,
-        ativo: "sim",
-        descricao: "Pacote pre-pago com validade de 12 meses"
-      },
-      {
-        plano_id: "ANUAL_5ANO",
-        nome_plano: "Plano anual 5o ano",
-        tipo_plano: "anual",
-        valor: 297,
-        creditos_inclusos: 0,
-        validade_dias: 365,
-        serie: "5o ano",
-        franquia_mensal: 200,
-        ativo: "sim",
-        descricao: "Plano anual com franquia mensal"
-      },
-      {
-        plano_id: "FREE20",
-        nome_plano: "Voucher Free 20",
-        tipo_plano: "voucher",
-        valor: 0,
-        creditos_inclusos: 20,
-        validade_dias: 30,
-        serie: "geral",
-        franquia_mensal: 0,
-        ativo: "sim",
-        descricao: "Voucher promocional"
-      }
+      { plano_id: "PRE100", nome_plano: "Pacote 100 questoes", tipo_plano: "prepago", valor: 29.9, creditos_inclusos: 100, validade_dias: 365, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Pacote pre-pago com validade de 12 meses" },
+      { plano_id: "PRE300", nome_plano: "Pacote 300 questoes", tipo_plano: "prepago", valor: 69.9, creditos_inclusos: 300, validade_dias: 365, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Pacote pre-pago com validade de 12 meses" },
+      { plano_id: "ANUAL_5ANO", nome_plano: "Plano anual 5o ano", tipo_plano: "anual", valor: 297, creditos_inclusos: 0, validade_dias: 365, serie: "5o ano", franquia_mensal: 200, ativo: "sim", descricao: "Plano anual com franquia mensal" },
+      { plano_id: "FREE20", nome_plano: "Voucher Free 20", tipo_plano: "voucher", valor: 0, creditos_inclusos: 20, validade_dias: 30, serie: "geral", franquia_mensal: 0, ativo: "sim", descricao: "Voucher promocional" }
     ],
     pagamentos: [],
     consumo: [],
     vouchers: [
-      {
-        voucher_id: "VC-0001",
-        codigo: "FREE20",
-        tipo: "gratuidade",
-        valor_desconto: 0,
-        percentual_desconto: 0,
-        creditos_bonus: 20,
-        gratuidade_total: "sim",
-        limite_uso: 100,
-        usos_realizados: 0,
-        validade_ate: "2026-12-31",
-        ativo: "sim",
-        observacao: "Voucher de lancamento"
-      }
+      { voucher_id: "VC-0001", codigo: "FREE20", tipo: "gratuidade", valor_desconto: 0, percentual_desconto: 0, creditos_bonus: 20, gratuidade_total: "sim", limite_uso: 100, usos_realizados: 0, validade_ate: "2026-12-31", ativo: "sim", observacao: "Voucher de lancamento" }
     ]
   };
 }
@@ -243,7 +218,186 @@ function writeAuthStore(data: AuthStore) {
   writeJson(AUTH_PATH, data);
 }
 
-function readSheetStore(): SheetData {
+function canUseGoogleSheets() {
+  return Boolean(GOOGLE_SHEET_ID && GOOGLE_SERVICE_ACCOUNT_JSON);
+}
+
+function parseServiceAccount() {
+  let raw = GOOGLE_SERVICE_ACCOUNT_JSON;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.private_key) parsed.private_key = String(parsed.private_key).replace(/\\n/g, "\n");
+    return parsed;
+  } catch {
+    try {
+      raw = Buffer.from(raw, "base64").toString("utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed.private_key) parsed.private_key = String(parsed.private_key).replace(/\\n/g, "\n");
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function getSheetsClient() {
+  if (sheetsClient) return sheetsClient;
+  const sa = parseServiceAccount();
+  if (!sa) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON invalido.");
+
+  const auth = new google.auth.JWT({
+    email: sa.client_email,
+    key: sa.private_key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+
+  sheetsClient = google.sheets({ version: "v4", auth });
+  return sheetsClient;
+}
+
+function rowToObj(headers: string[], row: any[]): Record<string, any> {
+  const obj: Record<string, any> = {};
+  headers.forEach((h, i) => {
+    obj[h] = row?.[i] ?? "";
+  });
+  return obj;
+}
+
+function objToRow(headers: string[], obj: Record<string, any>) {
+  return headers.map((h) => obj[h] ?? "");
+}
+
+async function readTab(tabName: string, headers: string[]) {
+  const client = getSheetsClient();
+  const response = await client.spreadsheets.values.get({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    range: `${tabName}!A1:ZZ`,
+  });
+  const values = response.data.values || [];
+  if (values.length === 0) return [] as Record<string, any>[];
+
+  const sourceHeaders = (values[0] || []).map((v) => String(v).trim());
+  const effectiveHeaders = sourceHeaders.length > 0 ? sourceHeaders : headers;
+
+  return values.slice(1)
+    .filter((r) => r.some((c) => String(c || "").trim() !== ""))
+    .map((r) => rowToObj(effectiveHeaders, r));
+}
+
+async function writeTab(tabName: string, headers: string[], rows: Record<string, any>[]) {
+  const client = getSheetsClient();
+
+  await client.spreadsheets.values.clear({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    range: `${tabName}!A:ZZ`,
+  });
+
+  const values = [headers, ...rows.map((r) => objToRow(headers, r))];
+  await client.spreadsheets.values.update({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    range: `${tabName}!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values },
+  });
+}
+
+async function readSheetStoreGoogle(): Promise<SheetData> {
+  const clientesRaw = await readTab("clientes", CLIENTES_HEADERS);
+  const planosRaw = await readTab("planos", PLANOS_HEADERS);
+  const pagamentosRaw = await readTab("pagamentos", PAGAMENTOS_HEADERS);
+  const consumoRaw = await readTab("consumo", CONSUMO_HEADERS);
+  const vouchersRaw = await readTab("vouchers", VOUCHERS_HEADERS);
+
+  const data: SheetData = {
+    clientes: clientesRaw.map((r) => ({
+      cliente_id: String(r.cliente_id || ""),
+      nome: String(r.nome || ""),
+      email: String(r.email || ""),
+      telefone: String(r.telefone || ""),
+      status_conta: String(r.status_conta || ""),
+      tipo_acesso: String(r.tipo_acesso || ""),
+      plano_id: String(r.plano_id || ""),
+      serie_contratada: String(r.serie_contratada || ""),
+      creditos_disponiveis: toNumber(r.creditos_disponiveis),
+      creditos_utilizados: toNumber(r.creditos_utilizados),
+      validade_ate: String(r.validade_ate || ""),
+      pagamento_status: String(r.pagamento_status || ""),
+      voucher_codigo: String(r.voucher_codigo || ""),
+      data_cadastro: String(r.data_cadastro || ""),
+      data_ultimo_pagamento: String(r.data_ultimo_pagamento || ""),
+      observacao: String(r.observacao || ""),
+    })),
+    planos: planosRaw.map((r) => ({
+      plano_id: String(r.plano_id || ""),
+      nome_plano: String(r.nome_plano || ""),
+      tipo_plano: String(r.tipo_plano || ""),
+      valor: toNumber(r.valor),
+      creditos_inclusos: toNumber(r.creditos_inclusos),
+      validade_dias: toNumber(r.validade_dias),
+      serie: String(r.serie || ""),
+      franquia_mensal: toNumber(r.franquia_mensal),
+      ativo: String(r.ativo || ""),
+      descricao: String(r.descricao || ""),
+    })),
+    pagamentos: pagamentosRaw.map((r) => ({
+      pagamento_id: String(r.pagamento_id || ""),
+      cliente_id: String(r.cliente_id || ""),
+      email: String(r.email || ""),
+      asaas_customer_id: String(r.asaas_customer_id || ""),
+      asaas_payment_id: String(r.asaas_payment_id || ""),
+      asaas_subscription_id: String(r.asaas_subscription_id || ""),
+      plano_id: String(r.plano_id || ""),
+      valor: toNumber(r.valor),
+      status: String(r.status || ""),
+      data_criacao: String(r.data_criacao || ""),
+      data_confirmacao: String(r.data_confirmacao || ""),
+      origem: String(r.origem || ""),
+      descricao: String(r.descricao || ""),
+    })),
+    consumo: consumoRaw.map((r) => ({
+      consumo_id: String(r.consumo_id || ""),
+      cliente_id: String(r.cliente_id || ""),
+      email: String(r.email || ""),
+      data_hora: String(r.data_hora || ""),
+      tipo_geracao: String(r.tipo_geracao || ""),
+      quantidade_questoes: toNumber(r.quantidade_questoes),
+      creditos_consumidos: toNumber(r.creditos_consumidos),
+      modelo_ia: String(r.modelo_ia || ""),
+      tokens_input: toNumber(r.tokens_input),
+      tokens_output: toNumber(r.tokens_output),
+      custo_estimado: toNumber(r.custo_estimado),
+      status_execucao: String(r.status_execucao || ""),
+      referencia: String(r.referencia || ""),
+    })),
+    vouchers: vouchersRaw.map((r) => ({
+      voucher_id: String(r.voucher_id || ""),
+      codigo: String(r.codigo || ""),
+      tipo: String(r.tipo || ""),
+      valor_desconto: toNumber(r.valor_desconto),
+      percentual_desconto: toNumber(r.percentual_desconto),
+      creditos_bonus: toNumber(r.creditos_bonus),
+      gratuidade_total: String(r.gratuidade_total || ""),
+      limite_uso: toNumber(r.limite_uso),
+      usos_realizados: toNumber(r.usos_realizados),
+      validade_ate: String(r.validade_ate || ""),
+      ativo: String(r.ativo || ""),
+      observacao: String(r.observacao || ""),
+    })),
+  };
+
+  if (data.planos.length === 0) data.planos = defaultSheetData().planos;
+  return data;
+}
+
+async function writeSheetStoreGoogle(data: SheetData) {
+  await writeTab("clientes", CLIENTES_HEADERS, data.clientes as any[]);
+  await writeTab("planos", PLANOS_HEADERS, data.planos as any[]);
+  await writeTab("pagamentos", PAGAMENTOS_HEADERS, data.pagamentos as any[]);
+  await writeTab("consumo", CONSUMO_HEADERS, data.consumo as any[]);
+  await writeTab("vouchers", VOUCHERS_HEADERS, data.vouchers as any[]);
+}
+
+function readSheetStoreLocal(): SheetData {
   const data = readJson<SheetData>(SHEET_PATH, defaultSheetData());
   if (!data.planos || data.planos.length === 0) data.planos = defaultSheetData().planos;
   if (!data.clientes) data.clientes = [];
@@ -254,8 +408,31 @@ function readSheetStore(): SheetData {
   return data;
 }
 
-function writeSheetStore(data: SheetData) {
+function writeSheetStoreLocal(data: SheetData) {
   writeJson(SHEET_PATH, data);
+}
+
+async function readSheetStore(): Promise<SheetData> {
+  if (!canUseGoogleSheets()) return readSheetStoreLocal();
+  try {
+    return await readSheetStoreGoogle();
+  } catch (e) {
+    console.error("Falha ao ler Google Sheets. Usando fallback local:", e);
+    return readSheetStoreLocal();
+  }
+}
+
+async function writeSheetStore(data: SheetData) {
+  if (!canUseGoogleSheets()) {
+    writeSheetStoreLocal(data);
+    return;
+  }
+  try {
+    await writeSheetStoreGoogle(data);
+  } catch (e) {
+    console.error("Falha ao gravar Google Sheets. Gravando fallback local:", e);
+    writeSheetStoreLocal(data);
+  }
 }
 
 function hashPassword(password: string, salt: string) {
@@ -283,8 +460,8 @@ function sanitizeUser(user: AuthUser) {
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
 
-function ensureClienteForUser(user: AuthUser) {
-  const sheet = readSheetStore();
+async function ensureClienteForUser(user: AuthUser) {
+  const sheet = await readSheetStore();
   let cliente = sheet.clientes.find((c) => c.email.toLowerCase() === user.email.toLowerCase());
   if (!cliente) {
     cliente = {
@@ -303,10 +480,10 @@ function ensureClienteForUser(user: AuthUser) {
       voucher_codigo: "",
       data_cadastro: today(),
       data_ultimo_pagamento: "",
-      observacao: "Criado via cadastro local"
+      observacao: "Criado via cadastro"
     };
     sheet.clientes.push(cliente);
-    writeSheetStore(sheet);
+    await writeSheetStore(sheet);
   }
   return cliente;
 }
@@ -347,7 +524,7 @@ export interface AuthenticatedRequest extends express.Request {
   authCliente?: ClienteRow;
 }
 
-export function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+export async function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   const token = getToken(req);
   if (!token) return res.status(401).json({ error: "Token ausente." });
   const auth = readAuthStore();
@@ -356,11 +533,11 @@ export function requireAuth(req: AuthenticatedRequest, res: express.Response, ne
   const user = auth.users.find((u) => u.id === session.userId);
   if (!user) return res.status(401).json({ error: "Usuario da sessao nao encontrado." });
   req.authUser = user;
-  req.authCliente = ensureClienteForUser(user);
+  req.authCliente = await ensureClienteForUser(user);
   return next();
 }
 
-export function requireCanGenerate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+export async function requireCanGenerate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   const cliente = req.authCliente;
   if (!cliente) return res.status(401).json({ error: "Cliente nao encontrado para sessao atual." });
   const check = canGenerateFromCliente(cliente);
@@ -398,7 +575,7 @@ function buildAccountStatus(cliente: ClienteRow) {
 }
 
 export function registerAccessControlRoutes(app: express.Express) {
-  app.post("/api/auth/register", (req, res) => {
+  app.post("/api/auth/register", async (req, res) => {
     try {
       const { name, email, password, role } = req.body || {};
       if (!name || !email || !password) {
@@ -428,7 +605,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       auth.sessions.push(session);
       writeAuthStore(auth);
 
-      const cliente = ensureClienteForUser(user);
+      const cliente = await ensureClienteForUser(user);
       return res.json({
         success: true,
         token: session.token,
@@ -440,7 +617,7 @@ export function registerAccessControlRoutes(app: express.Express) {
     }
   });
 
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body || {};
       if (!email || !password) {
@@ -455,7 +632,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       const session = createSession(user.id);
       auth.sessions.push(session);
       writeAuthStore(auth);
-      const cliente = ensureClienteForUser(user);
+      const cliente = await ensureClienteForUser(user);
       return res.json({
         success: true,
         token: session.token,
@@ -496,18 +673,16 @@ export function registerAccessControlRoutes(app: express.Express) {
     });
   });
 
-  app.get("/api/plans", (_req, res) => {
-    const sheet = readSheetStore();
-    return res.json({
-      plans: sheet.planos.filter((p) => (p.ativo || "").toLowerCase() === "sim")
-    });
+  app.get("/api/plans", async (_req, res) => {
+    const sheet = await readSheetStore();
+    return res.json({ plans: sheet.planos.filter((p) => (p.ativo || "").toLowerCase() === "sim") });
   });
 
-  app.post("/api/billing/create-checkout", requireAuth, (req: AuthenticatedRequest, res) => {
+  app.post("/api/billing/create-checkout", requireAuth, async (req: AuthenticatedRequest, res) => {
     const { planoId } = req.body || {};
     if (!planoId) return res.status(400).json({ error: "Campo obrigatorio: planoId." });
 
-    const sheet = readSheetStore();
+    const sheet = await readSheetStore();
     const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
     if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
     const plano = sheet.planos.find((p) => p.plano_id === planoId && (p.ativo || "").toLowerCase() === "sim");
@@ -534,7 +709,8 @@ export function registerAccessControlRoutes(app: express.Express) {
     cliente.pagamento_status = "pendente";
     cliente.status_conta = "aguardando_pagamento";
     cliente.observacao = `Checkout criado. Liberacao manual em ate ${MIN_MANUAL_RELEASE_HOURS} hora(s).`;
-    writeSheetStore(sheet);
+
+    await writeSheetStore(sheet);
 
     return res.json({
       success: true,
@@ -544,13 +720,12 @@ export function registerAccessControlRoutes(app: express.Express) {
         pagamentoId: payment.pagamento_id,
         asaasPaymentId: payment.asaas_payment_id,
         valor: payment.valor,
-        // URL de simulacao local
         checkoutUrl: `/billing/mock-checkout?pagamento_id=${payment.pagamento_id}`
       }
     });
   });
 
-  app.post("/api/billing/webhook/asaas", (req, res) => {
+  app.post("/api/billing/webhook/asaas", async (req, res) => {
     try {
       const token = req.headers["x-webhook-token"];
       const expected = process.env.ASAAS_WEBHOOK_TOKEN;
@@ -563,7 +738,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       const rawStatus = payload?.event || payload?.status || payload?.payment?.status || "pendente";
       if (!asaasPaymentId) return res.status(400).json({ error: "asaasPaymentId nao informado." });
 
-      const sheet = readSheetStore();
+      const sheet = await readSheetStore();
       const payment = sheet.pagamentos.find((p) => p.asaas_payment_id === asaasPaymentId || p.pagamento_id === asaasPaymentId);
       if (!payment) return res.status(404).json({ error: "Pagamento nao encontrado." });
 
@@ -574,7 +749,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       const cliente = sheet.clientes.find((c) => c.cliente_id === payment.cliente_id);
       const plano = sheet.planos.find((p) => p.plano_id === payment.plano_id);
       if (!cliente || !plano) {
-        writeSheetStore(sheet);
+        await writeSheetStore(sheet);
         return res.status(200).json({ success: true, warning: "Pagamento atualizado sem cliente/plano correspondente." });
       }
 
@@ -590,7 +765,7 @@ export function registerAccessControlRoutes(app: express.Express) {
         cliente.status_conta = "aguardando_pagamento";
       }
 
-      writeSheetStore(sheet);
+      await writeSheetStore(sheet);
       return res.json({ success: true, pagamentoStatus: status, account: buildAccountStatus(cliente) });
     } catch (e: any) {
       return res.status(500).json({ error: "Falha ao processar webhook.", details: e?.message });
@@ -598,14 +773,14 @@ export function registerAccessControlRoutes(app: express.Express) {
   });
 }
 
-export function applyConsumption(params: {
+export async function applyConsumption(params: {
   userEmail: string;
   modelName: string;
   questionCount: number;
   statusExecucao: "sucesso" | "falha";
   referencia?: string;
 }) {
-  const sheet = readSheetStore();
+  const sheet = await readSheetStore();
   const cliente = sheet.clientes.find((c) => c.email.toLowerCase() === params.userEmail.toLowerCase());
   if (!cliente) return null;
 
@@ -631,7 +806,7 @@ export function applyConsumption(params: {
     referencia: params.referencia || ""
   };
   sheet.consumo.push(consumo);
-  writeSheetStore(sheet);
+  await writeSheetStore(sheet);
   return { consumo, account: buildAccountStatus(cliente) };
 }
 
@@ -641,4 +816,3 @@ export function getAuthFromRequest(req: AuthenticatedRequest) {
     cliente: req.authCliente || null
   };
 }
-

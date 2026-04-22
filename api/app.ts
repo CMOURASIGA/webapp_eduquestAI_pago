@@ -175,7 +175,7 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
     });
 
     if (req.authUser?.email) {
-      applyConsumption({
+      await applyConsumption({
         userEmail: req.authUser.email,
         modelName: modelName || "gpt-4o-mini",
         questionCount: Number(questionCount || 1),
@@ -262,7 +262,7 @@ app.post("/api/gemini/generate", requireAuth, requireCanGenerate, async (req: Au
     });
 
     if (req.authUser?.email) {
-      applyConsumption({
+      await applyConsumption({
         userEmail: req.authUser.email,
         modelName: modelName || "gemini-2.5-flash",
         questionCount: Number(questionCount || 1),
