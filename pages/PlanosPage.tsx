@@ -38,8 +38,19 @@ export const PlanosPage: React.FC = () => {
     });
   }, [authToken]);
 
-  const paidPlans = useMemo(() => plans.filter((p) => Number(p?.valor || 0) > 0), [plans]);
-  const freePlans = useMemo(() => plans.filter((p) => Number(p?.valor || 0) <= 0), [plans]);
+  const contractPlans = useMemo(() => {
+    return plans.filter((p: any) => {
+      const tipo = String(p?.tipo_plano || '').toLowerCase();
+      const ativo = String(p?.ativo || '').toLowerCase() === 'sim';
+      return ativo && (tipo === 'prepago' || tipo === 'anual');
+    });
+  }, [plans]);
+  const freePlans = useMemo(() => {
+    return plans.filter((p: any) => {
+      const tipo = String(p?.tipo_plano || '').toLowerCase();
+      return tipo === 'gratuito' || tipo === 'voucher' || Number(p?.valor || 0) <= 0;
+    });
+  }, [plans]);
 
   const handleActivateFree = async () => {
     if (!authToken) return;
@@ -125,19 +136,24 @@ export const PlanosPage: React.FC = () => {
 
       <section className="space-y-4">
         <h2 className="text-xl font-bold text-slate-800">Planos para contratar</h2>
-        {paidPlans.length === 0 && (
+        {contractPlans.length === 0 && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 text-sm text-slate-500">
-            Nenhum plano pago disponivel. Verifique os valores na aba <code>planos</code> da planilha.
+            Nenhum plano contratavel disponivel. Verifique as colunas <code>tipo_plano</code> e <code>ativo</code> na aba <code>planos</code>.
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {paidPlans.map((plan: any) => (
+          {contractPlans.map((plan: any) => (
             <div key={plan.plano_id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-slate-800">{plan.nome_plano || plan.plano_id}</h3>
                 <Badge>{plan.plano_id}</Badge>
               </div>
               <p className="text-3xl font-black text-indigo-600">R$ {Number(plan.valor || 0).toFixed(2)}</p>
+              {Number(plan.valor || 0) <= 0 && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                  Valor do plano esta 0 na planilha. Ajuste a coluna <code>valor</code> para cobranca real.
+                </p>
+              )}
               <div className="text-sm text-slate-600 space-y-1">
                 <p><strong>Tipo:</strong> {plan.tipo_plano || '-'}</p>
                 <p><strong>Creditos:</strong> {Number(plan.creditos_inclusos || 0)}</p>
