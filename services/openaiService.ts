@@ -39,31 +39,61 @@ function ensureOnTopic(questions: Question[], conteudoBase: string[]) {
 const normalizeAlternativas = (alts: any): Question["alternativas"] => {
   if (Array.isArray(alts)) {
     return alts.map((alt: any, idx: number) => {
+      const fallbackLabel = String.fromCharCode(65 + idx);
       const texto =
         typeof alt === "string"
           ? alt
           : alt?.texto || alt?.text || "";
+      const normalizedText = String(texto || "").trim();
       return {
-        id: (alt as any)?.id || crypto.randomUUID(),
-        label: (alt as any)?.label || String.fromCharCode(65 + idx),
-        texto
+        id: (alt as any)?.id || (alt as any)?.label || fallbackLabel,
+        label: (alt as any)?.label || fallbackLabel,
+        texto: normalizedText
       };
     });
   }
   if (alts && typeof alts === "object") {
     return Object.entries(alts).map(([key, val]: any, idx: number) => {
+      const fallbackLabel = String.fromCharCode(65 + idx);
       const texto =
         typeof val === "string"
           ? val
           : val?.texto || val?.text || "";
+      const normalizedText = String(texto || "").trim();
       return {
-        id: val?.id || crypto.randomUUID(),
-        label: val?.label || key || String.fromCharCode(65 + idx),
-        texto
+        id: val?.id || val?.label || key || fallbackLabel,
+        label: val?.label || key || fallbackLabel,
+        texto: normalizedText
       };
     });
   }
   return [];
+};
+
+const ensureFiveAlternativas = (alternativas: Question["alternativas"]): Question["alternativas"] => {
+  const labels = ["A", "B", "C", "D", "E"];
+  return labels.map((label, idx) => {
+    const source = alternativas[idx] as any;
+    const texto = String(source?.texto || "").trim();
+    return {
+      id: String(source?.id || source?.label || label),
+      label,
+      texto: texto || `Opcao ${label}`
+    };
+  });
+};
+
+const resolveCorretaId = (
+  alternativaCorretaIdRaw: any,
+  alternativas: Question["alternativas"]
+) => {
+  const requested = String(alternativaCorretaIdRaw || "").trim();
+  if (!requested) return alternativas[0]?.id || "A";
+  const byId = alternativas.find((a) => a.id === requested);
+  if (byId) return byId.id;
+  const byLabel = alternativas.find((a) => String(a.label || "").toUpperCase() === requested.toUpperCase());
+  if (byLabel) return byLabel.id;
+  return alternativas[0]?.id || "A";
 };
 
 async function callOpenAIBatch(params: GenerateParams, offset: number, count: number): Promise<Question[]> {
@@ -111,12 +141,13 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
 
   const parsed = extractJSON(jsonString);
   const questions = (parsed.questions as Question[]).map((q, idx) => {
-    const alternativas = normalizeAlternativas((q as any).alternativas);
+    const alternativas = ensureFiveAlternativas(normalizeAlternativas((q as any).alternativas));
 
-    const alternativaCorretaId =
+    const alternativaCorretaIdRaw =
       (q as any).alternativaCorretaId ||
       (q as any).alternativa_correta_id ||
       (q as any).corretaId;
+    const alternativaCorretaId = resolveCorretaId(alternativaCorretaIdRaw, alternativas);
 
     if (!q.enunciado || alternativas.length < 2 || !alternativaCorretaId) {
       throw new Error(`A IA retornou uma questão incompleta (questão ${idx + 1 + offset}). Tente gerar novamente com um conteúdo base diferente ou modelo diferente.`);
