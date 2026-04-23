@@ -45,6 +45,18 @@ export const PlanosPage: React.FC = () => {
       return ativo && (tipo === 'prepago' || tipo === 'anual');
     });
   }, [plans]);
+
+  const displayPlanName = (plan: any) => {
+    const tipo = String(plan?.tipo_plano || '').toLowerCase();
+    if (tipo === 'anual') return 'Plano anual geral';
+    return plan?.nome_plano || plan?.plano_id || 'Plano';
+  };
+
+  const displayPlanSerie = (plan: any) => {
+    const tipo = String(plan?.tipo_plano || '').toLowerCase();
+    if (tipo === 'anual') return 'geral';
+    return plan?.serie || 'geral';
+  };
   const freePlans = useMemo(() => {
     return plans.filter((p: any) => {
       const tipo = String(p?.tipo_plano || '').toLowerCase();
@@ -145,7 +157,7 @@ export const PlanosPage: React.FC = () => {
           {contractPlans.map((plan: any) => (
             <div key={plan.plano_id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-800">{plan.nome_plano || plan.plano_id}</h3>
+                <h3 className="text-lg font-bold text-slate-800">{displayPlanName(plan)}</h3>
                 <Badge>{plan.plano_id}</Badge>
               </div>
               <p className="text-3xl font-black text-indigo-600">R$ {Number(plan.valor || 0).toFixed(2)}</p>
@@ -158,7 +170,7 @@ export const PlanosPage: React.FC = () => {
                 <p><strong>Tipo:</strong> {plan.tipo_plano || '-'}</p>
                 <p><strong>Creditos:</strong> {Number(plan.creditos_inclusos || 0)}</p>
                 <p><strong>Validade:</strong> {Number(plan.validade_dias || 0)} dias</p>
-                <p><strong>Serie:</strong> {plan.serie || 'geral'}</p>
+                <p><strong>Serie:</strong> {displayPlanSerie(plan)}</p>
                 {plan.descricao ? <p>{plan.descricao}</p> : null}
               </div>
               <Button
