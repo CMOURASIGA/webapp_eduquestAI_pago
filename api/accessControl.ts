@@ -1223,6 +1223,17 @@ function findPlanForCliente(sheet: SheetData, cliente: ClienteRow) {
   return sheet.planos.find((p) => p.plano_id === cliente.plano_id) || null;
 }
 
+function findLastConfirmedPlanIdForCliente(sheet: SheetData, clienteId: string) {
+  const lastConfirmed = sheet.pagamentos
+    .filter((p) => p.cliente_id === clienteId && normalizePaymentStatus(String(p.status)) === "confirmado" && String(p.plano_id || "").trim() !== "")
+    .sort((a, b) => {
+      const aDate = new Date(a.data_confirmacao || a.data_criacao || 0).getTime();
+      const bDate = new Date(b.data_confirmacao || b.data_criacao || 0).getTime();
+      return bDate - aDate;
+    })[0];
+  return lastConfirmed?.plano_id || "";
+}
+
 function isClienteExpired(cliente: ClienteRow) {
   if (!cliente.validade_ate) return false;
   return new Date(cliente.validade_ate).getTime() < new Date(today()).getTime();
@@ -1727,11 +1738,14 @@ export function registerAccessControlRoutes(app: express.Express) {
 
     const statusBefore = cliente.status_conta;
     const paymentBefore = cliente.pagamento_status;
-    cliente.plano_id = plano.plano_id;
+    const previousPlanId = cliente.plano_id || "";
     const alreadyUsable = canGenerateFromCliente(cliente, sheet).canGenerate;
     if (alreadyUsable) {
+      // Conta ja liberada: checkout atua como upgrade pendente sem trocar plano atual.
+      cliente.plano_id = previousPlanId;
       cliente.observacao = `Checkout pendente para upgrade de plano (${plano.plano_id}). Conta atual permanece ativa.`;
     } else {
+      cliente.plano_id = plano.plano_id;
       cliente.pagamento_status = "pendente";
       cliente.status_conta = "aguardando_pagamento";
       cliente.observacao = `Checkout criado. Liberacao manual em ate ${MIN_MANUAL_RELEASE_HOURS} hora(s).`;
@@ -1796,8 +1810,21 @@ export function registerAccessControlRoutes(app: express.Express) {
 
     const statusBefore = cliente.status_conta;
     const paymentBefore = cliente.pagamento_status;
+    const previousConfirmedPlanId = findLastConfirmedPlanIdForCliente(sheet, cliente.cliente_id);
     payment.status = "cancelado";
     payment.data_confirmacao = nowIso();
+
+    // Se o checkout pendente estava apontando o plano atual da conta, restaura para o ultimo plano confirmado.
+    if (cliente.plano_id === payment.plano_id) {
+      let restoredPlanId = previousConfirmedPlanId;
+      if (!restoredPlanId && (cliente.status_conta || "").toLowerCase() === "gratuito") {
+        restoredPlanId = FREE_ONCE_PLAN_ID;
+      }
+      if (restoredPlanId) {
+        cliente.plano_id = restoredPlanId;
+      }
+    }
+
     if ((cliente.status_conta || "").toLowerCase() === "aguardando_pagamento") {
       cliente.pagamento_status = "cancelado";
       if (Number(cliente.creditos_disponiveis || 0) > 0 && !isClienteExpired(cliente)) {
