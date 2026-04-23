@@ -5,13 +5,13 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
-import { GoogleGenAI, Type } from "@google/genai";
 import { cleanExtractedText } from "../utils/cleanExtractedText.js";
 import {
   registerAccessControlRoutes,
   requireAuth,
   requireCanGenerate,
   applyConsumption,
+  getQuestionPolicyForRequest,
   type AuthenticatedRequest,
   getAuthFromRequest
 } from "./accessControl.js";
@@ -94,7 +94,7 @@ app.get("/api/health/full", (_req, res) => {
   res.json({
     status: "ok",
     openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
-    geminiKeyPresent: Boolean(process.env.API_KEY),
+    geminiEnabled: false,
     nodeEnv: process.env.NODE_ENV || "development",
     vercel: Boolean(process.env.VERCEL)
   });
@@ -126,23 +126,8 @@ app.post("/api/openai/test", requireAuth, async (_req: AuthenticatedRequest, res
   }
 });
 
-app.post("/api/gemini/test", requireAuth, async (req: AuthenticatedRequest, res) => {
-  try {
-    const apiKey = req.body?.apiKey || process.env.API_KEY;
-    if (!apiKey) {
-      return res.status(401).json({ error: "API_KEY (Gemini) nao configurada." });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: req.body?.modelName || "gemini-2.5-flash",
-      contents: "Responda apenas: Conexao com Gemini bem-sucedida!"
-    });
-
-    return res.json({ success: true, message: response.text || "Resposta vazia do Gemini" });
-  } catch (error: any) {
-    return res.status(500).json({ error: "Erro ao testar Gemini.", details: error?.message });
-  }
+app.post("/api/gemini/test", requireAuth, async (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: "Gemini desabilitado. Este sistema utiliza apenas OpenAI para geracao de provas." });
 });
 
 app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: AuthenticatedRequest, res) => {
@@ -157,6 +142,14 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
 
     if (!prompt) {
       return res.status(400).json({ error: "O prompt e obrigatorio." });
+    }
+    const requestedQuestionCount = Math.max(1, Number(questionCount || 1));
+    const policy = getQuestionPolicyForRequest(req);
+    if (requestedQuestionCount > Number(policy.maxQuestionsPerExam || 40)) {
+      return res.status(400).json({
+        error: `Quantidade de questoes solicitada excede o limite do plano atual (${policy.maxQuestionsPerExam}).`,
+        maxQuestionsPerExam: Number(policy.maxQuestionsPerExam || 40)
+      });
     }
 
     const openai = new OpenAI({ apiKey });
@@ -180,7 +173,7 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
       await applyConsumption({
         userEmail: req.authUser.email,
         modelName: modelName || "gpt-4o-mini",
-        questionCount: Number(questionCount || 1),
+        questionCount: requestedQuestionCount,
         statusExecucao: "sucesso",
         referencia: "openai_generate"
       });
@@ -208,87 +201,7 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
 });
 
 app.post("/api/gemini/generate", requireAuth, requireCanGenerate, async (req: AuthenticatedRequest, res) => {
-  try {
-    const apiKey = req.body?.apiKey || process.env.API_KEY;
-    if (!apiKey) {
-      return res.status(401).json({ error: "API_KEY (Gemini) nao configurada." });
-    }
-
-    const { modelName, prompt, questionCount } = req.body || {};
-    if (!prompt) return res.status(400).json({ error: "O prompt e obrigatorio." });
-
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: modelName || "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            questions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  enunciado: { type: Type.STRING },
-                  alternativas: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        id: { type: Type.STRING },
-                        label: { type: Type.STRING },
-                        texto: { type: Type.STRING }
-                      }
-                    }
-                  },
-                  alternativaCorretaId: { type: Type.STRING },
-                  explicacao: { type: Type.STRING }
-                },
-                required: ["id", "enunciado", "alternativas", "alternativaCorretaId", "explicacao"]
-              }
-            }
-          },
-          required: ["questions"]
-        }
-      }
-    });
-
-    appendLog({
-      auth: getAuthFromRequest(req),
-      provider: "gemini",
-      prompt,
-      response: response.text
-    });
-
-    if (req.authUser?.email) {
-      await applyConsumption({
-        userEmail: req.authUser.email,
-        modelName: modelName || "gemini-2.5-flash",
-        questionCount: Number(questionCount || 1),
-        statusExecucao: "sucesso",
-        referencia: "gemini_generate"
-      });
-    }
-
-    return res.json({ success: true, result: response.text });
-  } catch (error: any) {
-    appendLog({
-      error: true,
-      auth: getAuthFromRequest(req),
-      provider: "gemini",
-      details: error?.message,
-      stack: error?.stack
-    });
-
-    return res.status(500).json({
-      error: "Erro ao gerar prova com Gemini.",
-      details: error?.message,
-      stack: process.env.NODE_ENV === "development" ? error?.stack : undefined
-    });
-  }
+  return res.status(403).json({ error: "Gemini desabilitado. Este sistema utiliza apenas OpenAI para geracao de provas." });
 });
 
 app.post("/api/extract-text-image", upload.single("image"), async (req: any, res) => {

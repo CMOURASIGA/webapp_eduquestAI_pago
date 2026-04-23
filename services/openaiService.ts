@@ -163,11 +163,12 @@ interface GenerateParams {
   nivelDificuldade: "baixa" | "media" | "alta";
   modelName: string;
   authToken?: string;
+  questionCount?: number;
 }
 
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {
   try {
-    const totalQuestions = QUESTIONS_PER_EXAM;
+    const totalQuestions = Math.max(1, Number(params.questionCount || QUESTIONS_PER_EXAM));
     // Lotes menores para reduzir tempo de cada chamada (Vercel timeout 60s)
     const batchSize = Math.min(8, Math.max(5, Math.ceil(totalQuestions / 5)));
     const batches: { offset: number; count: number }[] = [];

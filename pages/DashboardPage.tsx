@@ -28,7 +28,7 @@ const classifyAccuracy = (acc: number) => {
 };
 
 export const DashboardPage: React.FC = () => {
-  const { appMode, userName, userProfile } = useGeminiConfig();
+  const { appMode, userName, userProfile, accountStatus } = useGeminiConfig();
   const [exams, setExams] = useState<Exam[]>([]);
   const [performance, setPerformance] = useState<PerformanceResponse | null>(null);
   const [summaryPerf, setSummaryPerf] = useState<PerformanceResponse | null>(null);
@@ -131,8 +131,8 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col justify-between">
               <div className="text-lg font-bold text-slate-800 leading-tight">Média de Questões</div>
-              <div className="text-3xl font-black text-indigo-600">40</div>
-              <p className="text-xs text-slate-400 italic">Padrão de excelência EduQuest</p>
+              <div className="text-3xl font-black text-indigo-600">{accountStatus?.maxQuestionsPerExam || 40}</div>
+              <p className="text-xs text-slate-400 italic">Limite atual de questões por prova</p>
             </div>
           </>
         ) : (
@@ -196,7 +196,7 @@ export const DashboardPage: React.FC = () => {
         {appMode === 'aluno' && (
           <div className="bg-indigo-50 p-8 rounded-3xl border border-indigo-100 h-full flex flex-col justify-center">
             <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <BrainCircuit className="text-indigo-600" /> Insight do Gemini
+              <BrainCircuit className="text-indigo-600" /> Insight da Plataforma
             </h2>
             
             {completedExams.length > 0 && stats ? (
@@ -238,7 +238,7 @@ export const DashboardPage: React.FC = () => {
             <div>
               <h2 className="text-xl font-bold mb-2">Dica Pedagógica</h2>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Ao criar provas de estudo, o Gemini utiliza o <strong className="text-white">Conteúdo Base</strong> para focar nas competências do ENEM. Tente fornecer textos que tragam problemas reais do cotidiano para engajar melhor os alunos.
+                Ao criar provas de estudo, a OpenAI utiliza o <strong className="text-white">Conteúdo Base</strong> para focar nas competências do ENEM. Tente fornecer textos que tragam problemas reais do cotidiano para engajar melhor os alunos.
               </p>
             </div>
             <Button onClick={() => navigate('/nova-prova')} className="mt-8 bg-indigo-600 hover:bg-indigo-500">

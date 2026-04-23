@@ -17,6 +17,7 @@ async function run() {
   const port = Number((server.address() as any)?.port);
   const base = `http://127.0.0.1:${port}`;
   const email = `smoke_${Date.now()}@eduquest.local`;
+  const phone = `11${Math.floor(Math.random() * 900000000 + 100000000)}`;
   const password = "abc12345";
 
   try {
@@ -26,6 +27,7 @@ async function run() {
       body: JSON.stringify({
         name: "Smoke Test",
         email,
+        phone,
         password,
         role: "professor",
       }),

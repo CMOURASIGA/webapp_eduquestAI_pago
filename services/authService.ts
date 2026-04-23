@@ -10,6 +10,8 @@ export interface AccountStatus {
   pagamentoStatus: string;
   freeOnceUsed?: boolean;
   canActivateFreeOnce?: boolean;
+  freeOnceBlockReason?: string | null;
+  maxQuestionsPerExam?: number;
   canGenerate: boolean;
   blockReasons: string[];
 }
@@ -18,6 +20,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: AppMode;
 }
 
@@ -49,6 +52,7 @@ export async function registerWithBackend(params: {
   name: string;
   email: string;
   password: string;
+  phone: string;
   role: AppMode;
 }): Promise<AuthPayload> {
   const response = await fetch("/api/auth/register", {
@@ -119,6 +123,30 @@ export async function createCheckout(token: string, planoId: string) {
   return data;
 }
 
+export async function cancelCheckout(token: string, pagamentoId?: string) {
+  const response = await fetch("/api/billing/cancel-checkout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ pagamentoId }),
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao cancelar checkout.");
+  return data as { success: boolean; message: string; account: AccountStatus; cancelledPaymentId: string };
+}
+
+export async function cancelAccount(token: string) {
+  const response = await fetch("/api/account/cancel", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao cancelar conta.");
+  return data as { success: boolean; message: string; account: AccountStatus };
+}
+
 export async function activateFreeOnce(token: string) {
   const response = await fetch("/api/account/activate-free-once", {
     method: "POST",
@@ -140,5 +168,46 @@ export async function fetchBillingMode(token: string) {
     simulationEnabled: boolean;
     minReleaseHours: number;
   };
+}
+
+export interface Subaccount {
+  id: string;
+  name: string;
+  username: string;
+  role: AppMode;
+  createdAt: string;
+}
+
+export async function fetchSubaccounts(token: string) {
+  const response = await fetch("/api/account/subaccounts", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao listar subcadastros.");
+  return (data.subaccounts || []) as Subaccount[];
+}
+
+export async function createSubaccount(token: string, params: { name: string; username: string; password: string }) {
+  const response = await fetch("/api/account/subaccounts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao criar subcadastro.");
+  return data as { success: boolean; subaccount: Subaccount };
+}
+
+export async function deleteSubaccount(token: string, subId: string) {
+  const response = await fetch(`/api/account/subaccounts/${encodeURIComponent(subId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await parseJsonResponse(response);
+  if (!response.ok) throw new Error(data.error || data.details || "Falha ao remover subcadastro.");
+  return data as { success: boolean };
 }
 

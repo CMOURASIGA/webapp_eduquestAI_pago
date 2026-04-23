@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useGeminiConfig } from '../../context/GeminiConfigContext';
@@ -27,8 +27,8 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
     { label: 'Nova Prova', path: '/nova-prova', icon: PlusCircle, professorOnly: true },
     { label: 'Planos', path: '/planos', icon: Wallet },
     { label: 'Provas Salvas', path: '/provas', icon: FileText },
-    { label: 'Instruções', path: '/instrucoes', icon: HelpCircle, professorOnly: true },
-    { label: 'Configurações', path: '/config-gemini', icon: Settings, professorOnly: true },
+    { label: 'Instrucoes', path: '/instrucoes', icon: HelpCircle, professorOnly: true },
+    { label: 'Configuracoes', path: '/config-gemini', icon: Settings, professorOnly: true },
   ];
 
   const filteredNavItems = navItems.filter(item => !item.professorOnly || appMode === 'professor');
@@ -133,3 +133,4 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
     </div>
   );
 };
+

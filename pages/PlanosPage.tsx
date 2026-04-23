@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
-import { activateFreeOnce, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
+import { activateFreeOnce, cancelAccount, cancelCheckout, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { AlertTriangle, CreditCard, Sparkles } from 'lucide-react';
@@ -11,6 +11,8 @@ export const PlanosPage: React.FC = () => {
   const [billingMode, setBillingMode] = useState<'pix_manual' | 'teste'>('teste');
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
   const [freeLoading, setFreeLoading] = useState(false);
+  const [cancelCheckoutLoading, setCancelCheckoutLoading] = useState(false);
+  const [cancelAccountLoading, setCancelAccountLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [checkoutData, setCheckoutData] = useState<any | null>(null);
@@ -42,7 +44,10 @@ export const PlanosPage: React.FC = () => {
     return plans.filter((p: any) => {
       const tipo = String(p?.tipo_plano || '').toLowerCase();
       const ativo = String(p?.ativo || '').toLowerCase() === 'sim';
-      return ativo && (tipo === 'prepago' || tipo === 'anual');
+      if (!ativo) return false;
+      if (tipo === 'prepago' || tipo === 'anual') return true;
+      if (tipo === 'voucher') return true;
+      return false;
     });
   }, [plans]);
 
@@ -57,10 +62,12 @@ export const PlanosPage: React.FC = () => {
     if (tipo === 'anual') return 'geral';
     return plan?.serie || 'geral';
   };
+
   const freePlans = useMemo(() => {
     return plans.filter((p: any) => {
       const tipo = String(p?.tipo_plano || '').toLowerCase();
-      return tipo === 'gratuito' || tipo === 'voucher' || Number(p?.valor || 0) <= 0;
+      if (tipo === 'gratuito') return true;
+      return tipo !== 'voucher' && Number(p?.valor || 0) <= 0;
     });
   }, [plans]);
 
@@ -99,6 +106,40 @@ export const PlanosPage: React.FC = () => {
     }
   };
 
+  const handleCancelCheckout = async () => {
+    if (!authToken) return;
+    setCancelCheckoutLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await cancelCheckout(authToken, checkoutData?.pagamentoId);
+      setCheckoutData(null);
+      setNotice(data.message || 'Checkout pendente cancelado.');
+      await refreshAccountStatus();
+    } catch (err: any) {
+      if (isSessionError(err?.message)) await forceRelogin();
+      else setError(err?.message || 'Falha ao cancelar checkout pendente.');
+    } finally {
+      setCancelCheckoutLoading(false);
+    }
+  };
+
+  const handleCancelAccount = async () => {
+    if (!authToken) return;
+    const confirmed = window.confirm('Confirma o cancelamento da conta? Esta acao bloqueia novo uso gratuito com este email/telefone.');
+    if (!confirmed) return;
+    setCancelAccountLoading(true);
+    try {
+      await cancelAccount(authToken);
+      await logout();
+    } catch (err: any) {
+      if (isSessionError(err?.message)) await forceRelogin();
+      else setError(err?.message || 'Falha ao cancelar conta.');
+    } finally {
+      setCancelAccountLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <header>
@@ -125,6 +166,7 @@ export const PlanosPage: React.FC = () => {
           <p><strong>Pagamento:</strong> {accountStatus?.pagamentoStatus || '-'}</p>
           <p><strong>Plano atual:</strong> {accountStatus?.planoId || '-'}</p>
           <p><strong>Creditos:</strong> {accountStatus?.creditosDisponiveis ?? 0}</p>
+          <p><strong>Limite por prova:</strong> {accountStatus?.maxQuestionsPerExam || 40} questoes</p>
         </div>
         <div className="text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-3">
           Pagamentos sao validados manualmente. A liberacao da conta pode levar no minimo 1 hora apos o pagamento.
@@ -136,13 +178,13 @@ export const PlanosPage: React.FC = () => {
           <Sparkles className="text-indigo-600" size={18} /> Acesso Gratuito Inicial
         </h2>
         <p className="text-sm text-slate-600">
-          Disponivel uma unica vez por conta, para voce testar a plataforma antes da contratacao.
+          Disponivel uma unica vez por identidade (email/telefone), para testar a plataforma antes da contratacao.
         </p>
         <Button type="button" onClick={handleActivateFree} isLoading={freeLoading} variant="outline" disabled={!accountStatus?.canActivateFreeOnce}>
           Ativar acesso gratuito (uso unico)
         </Button>
         {!accountStatus?.canActivateFreeOnce && (
-          <p className="text-xs text-slate-500">Acesso gratuito ja utilizado ou conta ja ativa com creditos.</p>
+          <p className="text-xs text-slate-500">{accountStatus?.freeOnceBlockReason || 'Acesso gratuito ja utilizado ou conta ja ativa com creditos.'}</p>
         )}
       </section>
 
@@ -212,8 +254,19 @@ export const PlanosPage: React.FC = () => {
           <Button type="button" variant="outline" onClick={() => navigator.clipboard?.writeText(checkoutData?.pix?.chave || '')}>
             Copiar chave PIX
           </Button>
+          <Button type="button" variant="outline" isLoading={cancelCheckoutLoading} onClick={handleCancelCheckout}>
+            Cancelar pagamento pendente
+          </Button>
         </section>
       )}
+
+      <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+        <h3 className="text-base font-bold text-slate-800">Encerrar conta</h3>
+        <p className="text-sm text-slate-600">Ao cancelar, a conta fica registrada na planilha e novo acesso gratuito sera bloqueado para este email/telefone.</p>
+        <Button type="button" variant="outline" isLoading={cancelAccountLoading} onClick={handleCancelAccount}>
+          Cancelar minha conta
+        </Button>
+      </section>
     </div>
   );
 };

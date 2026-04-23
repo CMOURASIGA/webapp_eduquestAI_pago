@@ -3,19 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { SerieEscolar } from '../types/exam';
 import { serieLabels } from '../utils/seriesUtils';
 import { getSubjectsForSerie } from '../utils/subjectUtils';
-import { QUESTIONS_PER_EXAM } from '../utils/examConfig';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
-import { generateExamWithGemini } from '../services/geminiService';
 import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
 import { extractTextFromImage } from '../services/ocrService';
-import { activateFreeOnce, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
+import { activateFreeOnce, cancelAccount, cancelCheckout, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, Target, FileText, AlertTriangle } from 'lucide-react';
 
 export const NovaProvaPage: React.FC = () => {
-  const { selectedModel, aiProvider, activeApiKey, authToken, accountStatus, refreshAccountStatus, logout } = useGeminiConfig();
+  const { selectedModel, authToken, accountStatus, refreshAccountStatus, logout } = useGeminiConfig();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -23,6 +21,8 @@ export const NovaProvaPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [cancelCheckoutLoading, setCancelCheckoutLoading] = useState(false);
+  const [cancelAccountLoading, setCancelAccountLoading] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState('PRE100');
   const [lastCheckout, setLastCheckout] = useState<any | null>(null);
   const [releaseNotice, setReleaseNotice] = useState<string | null>(null);
@@ -38,6 +38,8 @@ export const NovaProvaPage: React.FC = () => {
     nivelDificuldade: 'media' as 'baixa' | 'media' | 'alta'
   });
 
+  const questionsPerExam = Number(accountStatus?.maxQuestionsPerExam || 40);
+
   const isSessionError = (message?: string) => {
     const m = (message || '').toLowerCase();
     return m.includes('sessao invalida') || m.includes('sessão inválida') || m.includes('token ausente');
@@ -49,7 +51,13 @@ export const NovaProvaPage: React.FC = () => {
   };
 
   const availableSubjects = getSubjectsForSerie(formData.serie);
-  const paidPlans = plans.filter((p: any) => Number(p?.valor || 0) > 0);
+  const contractPlans = plans.filter((p: any) => {
+    const tipo = String(p?.tipo_plano || '').toLowerCase();
+    const ativo = String(p?.ativo || '').toLowerCase() === 'sim';
+    if (!ativo) return false;
+    if (tipo === 'prepago' || tipo === 'anual' || tipo === 'voucher') return true;
+    return Number(p?.valor || 0) > 0;
+  });
 
   useEffect(() => {
     if (!availableSubjects.includes(formData.disciplina)) {
@@ -60,9 +68,13 @@ export const NovaProvaPage: React.FC = () => {
   useEffect(() => {
     fetchPlans().then((list) => {
       setPlans(list);
-      const paid = (list || []).filter((p: any) => Number(p?.valor || 0) > 0);
-      if (paid.length > 0 && !paid.find((p: any) => p.plano_id === selectedPlanId)) {
-        setSelectedPlanId(paid[0].plano_id);
+      const availableForContract = (list || []).filter((p: any) => {
+        const tipo = String(p?.tipo_plano || '').toLowerCase();
+        const ativo = String(p?.ativo || '').toLowerCase() === 'sim';
+        return ativo && (tipo === 'prepago' || tipo === 'anual' || tipo === 'voucher');
+      });
+      if (availableForContract.length > 0 && !availableForContract.find((p: any) => p.plano_id === selectedPlanId)) {
+        setSelectedPlanId(availableForContract[0].plano_id);
       }
     }).catch(() => {});
   }, []);
@@ -87,10 +99,6 @@ export const NovaProvaPage: React.FC = () => {
       setError(`Conta bloqueada para geracao. Motivos: ${accountStatus.blockReasons.join(' | ')}`);
       return;
     }
-    if (aiProvider === 'gemini' && !activeApiKey) {
-      setError('Nenhuma chave do Gemini esta disponivel. Configure API_KEY ou chave customizada.');
-      return;
-    }
 
     setIsLoading(true);
     setError(null);
@@ -100,13 +108,11 @@ export const NovaProvaPage: React.FC = () => {
         ...formData,
         conteudoBase: [formData.conteudoBase],
         modelName: selectedModel,
-        apiKey: aiProvider === 'gemini' ? activeApiKey : undefined,
         authToken,
+        questionCount: questionsPerExam,
       };
 
-      const generated = aiProvider === 'openai'
-        ? await generateExamWithOpenAI(params as any)
-        : await generateExamWithGemini(params as any);
+      const generated = await generateExamWithOpenAI(params as any);
 
       const newExam = {
         ...generated,
@@ -125,7 +131,7 @@ export const NovaProvaPage: React.FC = () => {
       if (isSessionError(err?.message)) {
         await forceRelogin();
       } else {
-        setError(`Erro ao gerar prova com ${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}: ${err.message}`);
+        setError(`Erro ao gerar prova com OpenAI: ${err.message}`);
       }
     } finally {
       setIsLoading(false);
@@ -217,14 +223,48 @@ export const NovaProvaPage: React.FC = () => {
     }
   };
 
+  const handleCancelPendingCheckout = async () => {
+    if (!authToken) return;
+    setCancelCheckoutLoading(true);
+    setError(null);
+    try {
+      const data = await cancelCheckout(authToken, lastCheckout?.pagamentoId);
+      setReleaseNotice(data.message || 'Checkout pendente cancelado.');
+      setLastCheckout(null);
+      await refreshAccountStatus();
+    } catch (err: any) {
+      if (isSessionError(err?.message)) await forceRelogin();
+      else setError(err?.message || 'Falha ao cancelar checkout.');
+    } finally {
+      setCancelCheckoutLoading(false);
+    }
+  };
+
+  const handleCancelAccount = async () => {
+    if (!authToken) return;
+    const confirmed = window.confirm('Confirma o cancelamento da conta? Esta acao bloqueia novo uso gratuito com este email/telefone.');
+    if (!confirmed) return;
+    setCancelAccountLoading(true);
+    setError(null);
+    try {
+      await cancelAccount(authToken);
+      await logout();
+    } catch (err: any) {
+      if (isSessionError(err?.message)) await forceRelogin();
+      else setError(err?.message || 'Falha ao cancelar conta.');
+    } finally {
+      setCancelAccountLoading(false);
+    }
+  };
+
   return (
     <div className="pb-12">
-      {isLoading && <LoadingOverlay message={`A IA (${aiProvider === 'openai' ? 'OpenAI' : 'Gemini'}) esta elaborando as questoes...`} />}
+      {isLoading && <LoadingOverlay message="A IA (OpenAI) esta elaborando as questoes..." />}
 
       <header className="mb-10 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black text-slate-800">Criar Material de Estudo</h1>
-          <p className="text-slate-500">Simulado de {QUESTIONS_PER_EXAM} questoes com controle de creditos.</p>
+          <p className="text-slate-500">Simulado de {questionsPerExam} questoes com controle de creditos.</p>
         </div>
         <div className="hidden md:flex p-3 rounded-2xl bg-indigo-100 text-indigo-600">
           <BrainCircuit size={32} />
@@ -271,12 +311,13 @@ export const NovaProvaPage: React.FC = () => {
               <p><strong>Pagamento:</strong> {accountStatus?.pagamentoStatus || '-'}</p>
               <p><strong>Creditos:</strong> {accountStatus?.creditosDisponiveis ?? 0}</p>
               <p><strong>Pode gerar:</strong> {accountStatus?.canGenerate ? 'Sim' : 'Nao'}</p>
+              <p><strong>Limite por prova:</strong> {questionsPerExam} questoes</p>
             </div>
             <div className="text-xs rounded-xl border border-amber-200 bg-amber-50 text-amber-800 p-3">
               Pagamentos sao validados manualmente. A liberacao da conta pode levar no minimo 1 hora apos o pagamento.
             </div>
             <div className="text-xs rounded-xl border border-sky-200 bg-sky-50 text-sky-800 p-3">
-              Cada conta pode ativar acesso gratuito inicial uma unica vez, para uma execucao. Depois disso, apenas contratando um plano.
+              Cada identidade (email/telefone) pode ativar acesso gratuito inicial uma unica vez. Reuso exige plano pago.
             </div>
             {releaseNotice && (
               <div className="text-xs rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 p-3">
@@ -294,17 +335,20 @@ export const NovaProvaPage: React.FC = () => {
               >
                 Ativar acesso gratuito inicial (1 execucao)
               </Button>
+              {!accountStatus?.canActivateFreeOnce && accountStatus?.freeOnceBlockReason && (
+                <p className="text-[11px] text-amber-700">{accountStatus.freeOnceBlockReason}</p>
+              )}
 
               <label className="block text-xs font-black uppercase text-slate-500">
                 Plano para contratacao
               </label>
-              {paidPlans.length > 0 ? (
+              {contractPlans.length > 0 ? (
                 <select
                   value={selectedPlanId}
                   onChange={(e) => setSelectedPlanId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm"
                 >
-                  {paidPlans.map((p: any) => (
+                  {contractPlans.map((p: any) => (
                     <option key={p.plano_id} value={p.plano_id}>{p.plano_id} - R$ {Number(p.valor || 0).toFixed(2)}</option>
                   ))}
                 </select>
@@ -316,9 +360,26 @@ export const NovaProvaPage: React.FC = () => {
                 onClick={handleCreateCheckout}
                 isLoading={billingLoading}
                 variant="outline"
-                disabled={paidPlans.length === 0}
+                disabled={contractPlans.length === 0}
               >
                 Gerar pagamento PIX do plano
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCancelPendingCheckout}
+                isLoading={cancelCheckoutLoading}
+                variant="outline"
+                disabled={!lastCheckout}
+              >
+                Cancelar pagamento pendente
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCancelAccount}
+                isLoading={cancelAccountLoading}
+                variant="outline"
+              >
+                Cancelar conta
               </Button>
               {lastCheckout?.pix && (
                 <div className="text-xs rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 space-y-2">

@@ -1,7 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { Button } from '../components/ui/Button';
-import { GraduationCap, UserCircle, School, BookOpen, AlertTriangle } from 'lucide-react';
+import { GraduationCap, UserCircle, AlertTriangle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login, register } = useGeminiConfig();
@@ -11,7 +11,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'professor' | 'aluno'>('professor');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -25,9 +25,10 @@ export const LoginPage: React.FC = () => {
       } else {
         await register({
           name: name.trim(),
+          phone: phone.trim(),
           email: email.trim(),
           password,
-          role,
+          role: 'professor',
         });
       }
     } catch (err: any) {
@@ -82,34 +83,29 @@ export const LoginPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setRole('professor')}
-                  className={`flex items-center justify-center gap-2 py-2 rounded-xl border-2 transition-all ${role === 'professor' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-500'}`}
-                >
-                  <School size={16} /> Professor
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole('aluno')}
-                  className={`flex items-center justify-center gap-2 py-2 rounded-xl border-2 transition-all ${role === 'aluno' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-200 text-slate-500'}`}
-                >
-                  <BookOpen size={16} /> Aluno
-                </button>
+              <div>
+                <label className="block text-xs font-black uppercase text-slate-500 mb-1">Telefone (DDD + numero)</label>
+                <input
+                  required
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="(11) 99999-9999"
+                />
               </div>
             </>
           )}
 
           <div>
-            <label className="block text-xs font-black uppercase text-slate-500 mb-1">Email</label>
+            <label className="block text-xs font-black uppercase text-slate-500 mb-1">{mode === 'login' ? 'Email ou usuario' : 'Email'}</label>
             <input
               required
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="voce@email.com"
+              placeholder={mode === 'login' ? 'email ou usuario do subcadastro' : 'voce@email.com'}
             />
           </div>
 
