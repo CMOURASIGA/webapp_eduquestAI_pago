@@ -13,6 +13,7 @@ import {
   applyConsumption,
   getQuestionPolicyForRequest,
   diagnoseGoogleSheetsPersistence,
+  getGoogleSheetsMetrics,
   type AuthenticatedRequest,
   getAuthFromRequest
 } from "./accessControl.js";
@@ -93,6 +94,7 @@ function writeAnswers(data: any[]) {
 
 app.get("/api/health/full", async (_req, res) => {
   const storage = await diagnoseGoogleSheetsPersistence();
+  const sheetsMetrics = getGoogleSheetsMetrics();
   res.json({
     status: "ok",
     openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
@@ -101,8 +103,16 @@ app.get("/api/health/full", async (_req, res) => {
     authStorageMode: storage.mode,
     googleSheetsConnectionOk: storage.ok,
     googleSheetsConnectionError: storage.error || null,
+    googleSheetsMetrics: sheetsMetrics,
     nodeEnv: process.env.NODE_ENV || "development",
     vercel: Boolean(process.env.VERCEL)
+  });
+});
+
+app.get("/api/health/sheets-metrics", (_req, res) => {
+  return res.json({
+    status: "ok",
+    googleSheetsMetrics: getGoogleSheetsMetrics(),
   });
 });
 
@@ -181,7 +191,8 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
         modelName: modelName || "gpt-4o-mini",
         questionCount: requestedQuestionCount,
         statusExecucao: "sucesso",
-        referencia: "openai_generate"
+        referencia: "openai_generate",
+        preloadedSheet: req.authSheet || null,
       });
     }
 

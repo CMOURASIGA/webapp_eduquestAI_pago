@@ -197,12 +197,51 @@ let knownSheetTabsLoadedAt = 0;
 let loadingKnownSheetTabs: Promise<void> | null = null;
 
 const SHEETS_TABS_CACHE_TTL_MS = Number(process.env.SHEETS_TABS_CACHE_TTL_MS || 5 * 60_000);
-const STORE_CACHE_TTL_MS = Number(process.env.SHEETS_STORE_CACHE_TTL_MS || 10_000);
+const STORE_CACHE_TTL_MS = Number(process.env.SHEETS_STORE_CACHE_TTL_MS || 60_000);
+const SHEETS_METRICS_WINDOW_MS = Number(process.env.SHEETS_METRICS_WINDOW_MS || 60_000);
 
 let sheetStoreCache: { data: SheetData; expiresAt: number } | null = null;
 let sheetStoreReadInFlight: Promise<SheetData> | null = null;
 let authStoreCache: { data: AuthStore; expiresAt: number } | null = null;
 let authStoreReadInFlight: Promise<AuthStore> | null = null;
+
+type SheetsCallKind = "read" | "write" | "meta";
+interface SheetsOpStats {
+  calls: number;
+  errors: number;
+  totalDurationMs: number;
+}
+interface SheetsMetricsBucket {
+  calls: number;
+  errors: number;
+  readCalls: number;
+  writeCalls: number;
+  metaCalls: number;
+  totalDurationMs: number;
+  ops: Record<string, SheetsOpStats>;
+}
+
+let sheetsWindowStartedAt = Date.now();
+let sheetsWindow: SheetsMetricsBucket = {
+  calls: 0,
+  errors: 0,
+  readCalls: 0,
+  writeCalls: 0,
+  metaCalls: 0,
+  totalDurationMs: 0,
+  ops: {},
+};
+const sheetsLifetime: SheetsMetricsBucket = {
+  calls: 0,
+  errors: 0,
+  readCalls: 0,
+  writeCalls: 0,
+  metaCalls: 0,
+  totalDurationMs: 0,
+  ops: {},
+};
+let sheetsLastErrorAt = "";
+let sheetsLastErrorMessage = "";
 
 function ensureDir() {
   if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -411,6 +450,101 @@ function getSheetsClient() {
   return sheetsClient;
 }
 
+function nextSheetsWindowIfNeeded(nowMs: number) {
+  if ((nowMs - sheetsWindowStartedAt) < SHEETS_METRICS_WINDOW_MS) return;
+  sheetsWindowStartedAt = nowMs;
+  sheetsWindow = {
+    calls: 0,
+    errors: 0,
+    readCalls: 0,
+    writeCalls: 0,
+    metaCalls: 0,
+    totalDurationMs: 0,
+    ops: {},
+  };
+}
+
+function incKindCounter(bucket: SheetsMetricsBucket, kind: SheetsCallKind) {
+  if (kind === "read") bucket.readCalls += 1;
+  else if (kind === "write") bucket.writeCalls += 1;
+  else bucket.metaCalls += 1;
+}
+
+function recordSheetsCall(params: {
+  op: string;
+  kind: SheetsCallKind;
+  durationMs: number;
+  error?: any;
+}) {
+  const nowMs = Date.now();
+  nextSheetsWindowIfNeeded(nowMs);
+
+  const targets = [sheetsWindow, sheetsLifetime];
+  targets.forEach((bucket) => {
+    bucket.calls += 1;
+    bucket.totalDurationMs += params.durationMs;
+    incKindCounter(bucket, params.kind);
+    const opStats = bucket.ops[params.op] || { calls: 0, errors: 0, totalDurationMs: 0 };
+    opStats.calls += 1;
+    opStats.totalDurationMs += params.durationMs;
+    if (params.error) {
+      bucket.errors += 1;
+      opStats.errors += 1;
+    }
+    bucket.ops[params.op] = opStats;
+  });
+
+  if (params.error) {
+    sheetsLastErrorAt = new Date(nowMs).toISOString();
+    sheetsLastErrorMessage = String(params.error?.message || params.error || "erro desconhecido");
+  }
+}
+
+async function runSheetsCall<T>(op: string, kind: SheetsCallKind, fn: () => Promise<T>) {
+  const startedAt = Date.now();
+  try {
+    const result = await fn();
+    recordSheetsCall({ op, kind, durationMs: Date.now() - startedAt });
+    return result;
+  } catch (error: any) {
+    recordSheetsCall({ op, kind, durationMs: Date.now() - startedAt, error });
+    throw error;
+  }
+}
+
+function cloneBucket(bucket: SheetsMetricsBucket) {
+  const ops: Record<string, { calls: number; errors: number; avgDurationMs: number }> = {};
+  Object.keys(bucket.ops).forEach((op) => {
+    const value = bucket.ops[op];
+    ops[op] = {
+      calls: value.calls,
+      errors: value.errors,
+      avgDurationMs: value.calls > 0 ? Number((value.totalDurationMs / value.calls).toFixed(2)) : 0,
+    };
+  });
+  return {
+    calls: bucket.calls,
+    errors: bucket.errors,
+    readCalls: bucket.readCalls,
+    writeCalls: bucket.writeCalls,
+    metaCalls: bucket.metaCalls,
+    avgDurationMs: bucket.calls > 0 ? Number((bucket.totalDurationMs / bucket.calls).toFixed(2)) : 0,
+    ops,
+  };
+}
+
+export function getGoogleSheetsMetrics() {
+  nextSheetsWindowIfNeeded(Date.now());
+  return {
+    windowStartedAt: new Date(sheetsWindowStartedAt).toISOString(),
+    windowMs: SHEETS_METRICS_WINDOW_MS,
+    window: cloneBucket(sheetsWindow),
+    lifetime: cloneBucket(sheetsLifetime),
+    lastErrorAt: sheetsLastErrorAt || null,
+    lastErrorMessage: sheetsLastErrorMessage || null,
+  };
+}
+
 function cloneSheetData(data: SheetData): SheetData {
   return JSON.parse(JSON.stringify(data));
 }
@@ -428,10 +562,10 @@ async function refreshKnownSheetTabs(force = false) {
   }
   loadingKnownSheetTabs = (async () => {
     const client = getSheetsClient();
-    const spreadsheet = await client.spreadsheets.get({
+    const spreadsheet = await runSheetsCall("spreadsheets.get.tabs", "meta", () => client.spreadsheets.get({
       spreadsheetId: GOOGLE_SHEET_ID,
       fields: "sheets.properties.title",
-    });
+    }));
     knownSheetTabs = new Set(
       (spreadsheet.data.sheets || [])
         .map((s: any) => String(s?.properties?.title || ""))
@@ -454,12 +588,12 @@ async function ensureTabsExist(tabNames: string[]) {
   if (missing.length === 0) return;
 
   const client = getSheetsClient();
-  await client.spreadsheets.batchUpdate({
+  await runSheetsCall("spreadsheets.batchUpdate.addSheet", "write", () => client.spreadsheets.batchUpdate({
     spreadsheetId: GOOGLE_SHEET_ID,
     requestBody: {
       requests: missing.map((title) => ({ addSheet: { properties: { title } } })),
     },
-  });
+  }));
   missing.forEach((t) => existing.add(t));
   knownSheetTabs = existing;
   knownSheetTabsLoadedAt = Date.now();
@@ -480,11 +614,11 @@ function objToRow(headers: string[], obj: Record<string, any>) {
 async function readTab(tabName: string, headers: string[]) {
   await ensureTabsExist([tabName]);
   const client = getSheetsClient();
-  const response = await client.spreadsheets.values.get({
+  const response = await runSheetsCall("spreadsheets.values.get", "read", () => client.spreadsheets.values.get({
     spreadsheetId: GOOGLE_SHEET_ID,
     range: `${tabName}!A1:ZZ`,
     valueRenderOption: "UNFORMATTED_VALUE",
-  });
+  }));
   const values = response.data.values || [];
   if (values.length === 0) return [] as Record<string, any>[];
 
@@ -496,31 +630,68 @@ async function readTab(tabName: string, headers: string[]) {
     .map((r) => rowToObj(effectiveHeaders, r));
 }
 
+async function readTabsBatch(tabConfigs: Array<{ tabName: string; headers: string[] }>) {
+  if (tabConfigs.length === 0) return {} as Record<string, Record<string, any>[]>;
+  await ensureTabsExist(tabConfigs.map((t) => t.tabName));
+  const client = getSheetsClient();
+  const response = await runSheetsCall("spreadsheets.values.batchGet", "read", () => client.spreadsheets.values.batchGet({
+    spreadsheetId: GOOGLE_SHEET_ID,
+    ranges: tabConfigs.map((t) => `${t.tabName}!A1:ZZ`),
+    valueRenderOption: "UNFORMATTED_VALUE",
+  }));
+  const valueRanges = response.data.valueRanges || [];
+  const result: Record<string, Record<string, any>[]> = {};
+
+  tabConfigs.forEach((cfg, index) => {
+    const values = (valueRanges[index]?.values || []) as any[][];
+    if (values.length === 0) {
+      result[cfg.tabName] = [];
+      return;
+    }
+    const sourceHeaders = (values[0] || []).map((v) => String(v).trim());
+    const effectiveHeaders = sourceHeaders.length > 0 ? sourceHeaders : cfg.headers;
+    result[cfg.tabName] = values
+      .slice(1)
+      .filter((r) => r.some((c) => String(c || "").trim() !== ""))
+      .map((r) => rowToObj(effectiveHeaders, r));
+  });
+
+  return result;
+}
+
 async function writeTab(tabName: string, headers: string[], rows: Record<string, any>[]) {
   await ensureTabsExist([tabName]);
   const client = getSheetsClient();
 
-  await client.spreadsheets.values.clear({
+  await runSheetsCall("spreadsheets.values.clear", "write", () => client.spreadsheets.values.clear({
     spreadsheetId: GOOGLE_SHEET_ID,
     range: `${tabName}!A:ZZ`,
-  });
+  }));
 
   const values = [headers, ...rows.map((r) => objToRow(headers, r))];
-  await client.spreadsheets.values.update({
+  await runSheetsCall("spreadsheets.values.update", "write", () => client.spreadsheets.values.update({
     spreadsheetId: GOOGLE_SHEET_ID,
     range: `${tabName}!A1`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values },
-  });
+  }));
 }
 
 async function readSheetStoreGoogle(): Promise<SheetData> {
-  const clientesRaw = await readTab("clientes", CLIENTES_HEADERS);
-  const planosRaw = await readTab("planos", PLANOS_HEADERS);
-  const pagamentosRaw = await readTab("pagamentos", PAGAMENTOS_HEADERS);
-  const consumoRaw = await readTab("consumo", CONSUMO_HEADERS);
-  const vouchersRaw = await readTab("vouchers", VOUCHERS_HEADERS);
-  const eventosContaRaw = await readTab("eventos_conta", EVENTOS_CONTA_HEADERS);
+  const tabs = await readTabsBatch([
+    { tabName: "clientes", headers: CLIENTES_HEADERS },
+    { tabName: "planos", headers: PLANOS_HEADERS },
+    { tabName: "pagamentos", headers: PAGAMENTOS_HEADERS },
+    { tabName: "consumo", headers: CONSUMO_HEADERS },
+    { tabName: "vouchers", headers: VOUCHERS_HEADERS },
+    { tabName: "eventos_conta", headers: EVENTOS_CONTA_HEADERS },
+  ]);
+  const clientesRaw = tabs.clientes || [];
+  const planosRaw = tabs.planos || [];
+  const pagamentosRaw = tabs.pagamentos || [];
+  const consumoRaw = tabs.consumo || [];
+  const vouchersRaw = tabs.vouchers || [];
+  const eventosContaRaw = tabs.eventos_conta || [];
 
   const data: SheetData = {
     clientes: clientesRaw.map((r) => ({
@@ -664,8 +835,12 @@ async function writeSheetStoreGoogle(data: SheetData) {
 }
 
 async function readAuthStoreGoogle(): Promise<AuthStore> {
-  const usersRaw = await readTab("auth_users", AUTH_USERS_HEADERS);
-  const sessionsRaw = await readTab("auth_sessions", AUTH_SESSIONS_HEADERS);
+  const tabs = await readTabsBatch([
+    { tabName: "auth_users", headers: AUTH_USERS_HEADERS },
+    { tabName: "auth_sessions", headers: AUTH_SESSIONS_HEADERS },
+  ]);
+  const usersRaw = tabs.auth_users || [];
+  const sessionsRaw = tabs.auth_sessions || [];
 
   return {
     users: usersRaw.map((r) => ({
@@ -1725,8 +1900,9 @@ export async function applyConsumption(params: {
   questionCount: number;
   statusExecucao: "sucesso" | "falha";
   referencia?: string;
+  preloadedSheet?: SheetData | null;
 }) {
-  const sheet = await readSheetStore();
+  const sheet = params.preloadedSheet || await readSheetStore();
   const cliente = sheet.clientes.find((c) => c.email.toLowerCase() === params.userEmail.toLowerCase());
   if (!cliente) return null;
 
