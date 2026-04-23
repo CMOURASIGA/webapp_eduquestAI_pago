@@ -943,12 +943,31 @@ function writeSheetStoreLocal(data: SheetData) {
   writeJson(SHEET_PATH, data);
 }
 
-async function readSheetStore(): Promise<SheetData> {
+async function readSheetStore(options?: { forceFresh?: boolean }): Promise<SheetData> {
+  const forceFresh = Boolean(options?.forceFresh);
   if (!canUseGoogleSheets()) {
     if (IS_VERCEL_RUNTIME) {
       throw new Error("Persistencia obrigatoria nao configurada no Vercel. Defina GOOGLE_SHEET_ID e GOOGLE_SERVICE_ACCOUNT_JSON.");
     }
     return readSheetStoreLocal();
+  }
+
+  if (forceFresh) {
+    try {
+      const data = await readSheetStoreGoogle();
+      sheetStoreCache = {
+        data: cloneSheetData(data),
+        expiresAt: Date.now() + STORE_CACHE_TTL_MS,
+      };
+      return cloneSheetData(data);
+    } catch (e) {
+      if (IS_VERCEL_RUNTIME) {
+        console.error("Falha ao ler Google Sheets forcando refresh no Vercel (sem fallback local):", e);
+        throw e;
+      }
+      console.error("Falha ao ler Google Sheets forcando refresh. Usando fallback local:", e);
+      return readSheetStoreLocal();
+    }
   }
 
   const cached = sheetStoreCache;
@@ -1149,8 +1168,32 @@ export async function requireCanGenerate(req: AuthenticatedRequest, res: express
   const cliente = req.authCliente;
   if (!cliente) return res.status(401).json({ error: "Cliente nao encontrado para sessao atual." });
   const sheet = req.authSheet || await readSheetStore();
-  const check = canGenerateFromCliente(cliente, sheet);
+  let check = canGenerateFromCliente(cliente, sheet);
   if (!check.canGenerate) {
+    try {
+      // Revalida com leitura fresca para evitar falso bloqueio apos checkout/cancelamento recente.
+      const freshSheet = await readSheetStore({ forceFresh: true });
+      const freshCliente = freshSheet.clientes.find((c) =>
+        c.cliente_id === cliente.cliente_id ||
+        c.email.toLowerCase() === cliente.email.toLowerCase()
+      );
+      if (freshCliente) {
+        const freshCheck = canGenerateFromCliente(freshCliente, freshSheet);
+        if (freshCheck.canGenerate) {
+          req.authSheet = freshSheet;
+          req.authCliente = freshCliente;
+          return next();
+        }
+        check = freshCheck;
+        return res.status(402).json({
+          error: "Conta sem permissao para gerar conteudo.",
+          reasons: check.reasons,
+          account: buildAccountStatus(freshCliente, freshSheet)
+        });
+      }
+    } catch (e) {
+      console.error("Falha na revalidacao fresca de permissao para gerar:", e);
+    }
     return res.status(402).json({
       error: "Conta sem permissao para gerar conteudo.",
       reasons: check.reasons,
