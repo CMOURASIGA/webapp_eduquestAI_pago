@@ -139,6 +139,7 @@ interface AuthStore {
 }
 
 const WRITABLE_ROOT = process.env.VERCEL ? "/tmp" : process.cwd();
+const IS_VERCEL_RUNTIME = Boolean(process.env.VERCEL);
 const LOGS_DIR = path.resolve(WRITABLE_ROOT, "logs");
 const AUTH_PATH = path.join(LOGS_DIR, "authStore.json");
 const SHEET_PATH = path.join(LOGS_DIR, "sheetStore.json");
@@ -696,10 +697,19 @@ function writeSheetStoreLocal(data: SheetData) {
 }
 
 async function readSheetStore(): Promise<SheetData> {
-  if (!canUseGoogleSheets()) return readSheetStoreLocal();
+  if (!canUseGoogleSheets()) {
+    if (IS_VERCEL_RUNTIME) {
+      throw new Error("Persistencia obrigatoria nao configurada no Vercel. Defina GOOGLE_SHEET_ID e GOOGLE_SERVICE_ACCOUNT_JSON.");
+    }
+    return readSheetStoreLocal();
+  }
   try {
     return await readSheetStoreGoogle();
   } catch (e) {
+    if (IS_VERCEL_RUNTIME) {
+      console.error("Falha ao ler Google Sheets no Vercel (sem fallback local):", e);
+      throw e;
+    }
     console.error("Falha ao ler Google Sheets. Usando fallback local:", e);
     return readSheetStoreLocal();
   }
@@ -707,12 +717,19 @@ async function readSheetStore(): Promise<SheetData> {
 
 async function writeSheetStore(data: SheetData) {
   if (!canUseGoogleSheets()) {
+    if (IS_VERCEL_RUNTIME) {
+      throw new Error("Persistencia obrigatoria nao configurada no Vercel. Defina GOOGLE_SHEET_ID e GOOGLE_SERVICE_ACCOUNT_JSON.");
+    }
     writeSheetStoreLocal(data);
     return;
   }
   try {
     await writeSheetStoreGoogle(data);
   } catch (e) {
+    if (IS_VERCEL_RUNTIME) {
+      console.error("Falha ao gravar Google Sheets no Vercel (sem fallback local):", e);
+      throw e;
+    }
     console.error("Falha ao gravar Google Sheets. Gravando fallback local:", e);
     writeSheetStoreLocal(data);
   }
@@ -721,11 +738,18 @@ async function writeSheetStore(data: SheetData) {
 async function readAuthStore(): Promise<AuthStore> {
   let data: AuthStore;
   if (!canUseGoogleSheets()) {
+    if (IS_VERCEL_RUNTIME) {
+      throw new Error("Persistencia de autenticacao obrigatoria no Vercel. Defina GOOGLE_SHEET_ID e GOOGLE_SERVICE_ACCOUNT_JSON.");
+    }
     data = readAuthStoreLocal();
   } else {
     try {
       data = await readAuthStoreGoogle();
     } catch (e) {
+      if (IS_VERCEL_RUNTIME) {
+        console.error("Falha ao ler auth no Google Sheets no Vercel (sem fallback local):", e);
+        throw e;
+      }
       console.error("Falha ao ler auth no Google Sheets. Usando fallback local:", e);
       data = readAuthStoreLocal();
     }
@@ -743,12 +767,19 @@ async function readAuthStore(): Promise<AuthStore> {
 
 async function writeAuthStore(data: AuthStore) {
   if (!canUseGoogleSheets()) {
+    if (IS_VERCEL_RUNTIME) {
+      throw new Error("Persistencia de autenticacao obrigatoria no Vercel. Defina GOOGLE_SHEET_ID e GOOGLE_SERVICE_ACCOUNT_JSON.");
+    }
     writeAuthStoreLocal(data);
     return;
   }
   try {
     await writeAuthStoreGoogle(data);
   } catch (e) {
+    if (IS_VERCEL_RUNTIME) {
+      console.error("Falha ao gravar auth no Google Sheets no Vercel (sem fallback local):", e);
+      throw e;
+    }
     console.error("Falha ao gravar auth no Google Sheets. Gravando fallback local:", e);
     writeAuthStoreLocal(data);
   }
