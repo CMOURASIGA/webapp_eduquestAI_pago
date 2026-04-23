@@ -192,6 +192,17 @@ const EVENTOS_CONTA_HEADERS = [
 ];
 
 let sheetsClient: ReturnType<typeof google.sheets> | null = null;
+let knownSheetTabs: Set<string> | null = null;
+let knownSheetTabsLoadedAt = 0;
+let loadingKnownSheetTabs: Promise<void> | null = null;
+
+const SHEETS_TABS_CACHE_TTL_MS = Number(process.env.SHEETS_TABS_CACHE_TTL_MS || 5 * 60_000);
+const STORE_CACHE_TTL_MS = Number(process.env.SHEETS_STORE_CACHE_TTL_MS || 10_000);
+
+let sheetStoreCache: { data: SheetData; expiresAt: number } | null = null;
+let sheetStoreReadInFlight: Promise<SheetData> | null = null;
+let authStoreCache: { data: AuthStore; expiresAt: number } | null = null;
+let authStoreReadInFlight: Promise<AuthStore> | null = null;
 
 function ensureDir() {
   if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -400,27 +411,58 @@ function getSheetsClient() {
   return sheetsClient;
 }
 
+function cloneSheetData(data: SheetData): SheetData {
+  return JSON.parse(JSON.stringify(data));
+}
+
+function cloneAuthStore(data: AuthStore): AuthStore {
+  return JSON.parse(JSON.stringify(data));
+}
+
+async function refreshKnownSheetTabs(force = false) {
+  const cacheFresh = knownSheetTabs && (Date.now() - knownSheetTabsLoadedAt) < SHEETS_TABS_CACHE_TTL_MS;
+  if (!force && cacheFresh) return;
+  if (loadingKnownSheetTabs) {
+    await loadingKnownSheetTabs;
+    return;
+  }
+  loadingKnownSheetTabs = (async () => {
+    const client = getSheetsClient();
+    const spreadsheet = await client.spreadsheets.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      fields: "sheets.properties.title",
+    });
+    knownSheetTabs = new Set(
+      (spreadsheet.data.sheets || [])
+        .map((s: any) => String(s?.properties?.title || ""))
+        .filter(Boolean)
+    );
+    knownSheetTabsLoadedAt = Date.now();
+  })();
+  try {
+    await loadingKnownSheetTabs;
+  } finally {
+    loadingKnownSheetTabs = null;
+  }
+}
+
 async function ensureTabsExist(tabNames: string[]) {
-  const client = getSheetsClient();
-  const spreadsheet = await client.spreadsheets.get({
-    spreadsheetId: GOOGLE_SHEET_ID,
-    fields: "sheets.properties.title",
-  });
-  const existing = new Set(
-    (spreadsheet.data.sheets || [])
-      .map((s: any) => String(s?.properties?.title || ""))
-      .filter(Boolean)
-  );
+  await refreshKnownSheetTabs();
+  const existing = knownSheetTabs || new Set<string>();
 
   const missing = tabNames.filter((t) => !existing.has(t));
   if (missing.length === 0) return;
 
+  const client = getSheetsClient();
   await client.spreadsheets.batchUpdate({
     spreadsheetId: GOOGLE_SHEET_ID,
     requestBody: {
       requests: missing.map((title) => ({ addSheet: { properties: { title } } })),
     },
   });
+  missing.forEach((t) => existing.add(t));
+  knownSheetTabs = existing;
+  knownSheetTabsLoadedAt = Date.now();
 }
 
 function rowToObj(headers: string[], row: any[]): Record<string, any> {
@@ -733,8 +775,32 @@ async function readSheetStore(): Promise<SheetData> {
     }
     return readSheetStoreLocal();
   }
+
+  const cached = sheetStoreCache;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cloneSheetData(cached.data);
+  }
+  if (sheetStoreReadInFlight) {
+    const data = await sheetStoreReadInFlight;
+    return cloneSheetData(data);
+  }
+
+  sheetStoreReadInFlight = (async () => {
+    try {
+      const data = await readSheetStoreGoogle();
+      sheetStoreCache = {
+        data: cloneSheetData(data),
+        expiresAt: Date.now() + STORE_CACHE_TTL_MS,
+      };
+      return data;
+    } finally {
+      sheetStoreReadInFlight = null;
+    }
+  })();
+
   try {
-    return await readSheetStoreGoogle();
+    const data = await sheetStoreReadInFlight;
+    return cloneSheetData(data);
   } catch (e) {
     if (IS_VERCEL_RUNTIME) {
       console.error("Falha ao ler Google Sheets no Vercel (sem fallback local):", e);
@@ -755,6 +821,10 @@ async function writeSheetStore(data: SheetData) {
   }
   try {
     await writeSheetStoreGoogle(data);
+    sheetStoreCache = {
+      data: cloneSheetData(data),
+      expiresAt: Date.now() + STORE_CACHE_TTL_MS,
+    };
   } catch (e) {
     if (IS_VERCEL_RUNTIME) {
       console.error("Falha ao gravar Google Sheets no Vercel (sem fallback local):", e);
@@ -774,7 +844,26 @@ async function readAuthStore(): Promise<AuthStore> {
     data = readAuthStoreLocal();
   } else {
     try {
-      data = await readAuthStoreGoogle();
+      const cached = authStoreCache;
+      if (cached && cached.expiresAt > Date.now()) {
+        data = cloneAuthStore(cached.data);
+      } else if (authStoreReadInFlight) {
+        data = cloneAuthStore(await authStoreReadInFlight);
+      } else {
+        authStoreReadInFlight = (async () => {
+          try {
+            const fresh = await readAuthStoreGoogle();
+            authStoreCache = {
+              data: cloneAuthStore(fresh),
+              expiresAt: Date.now() + STORE_CACHE_TTL_MS,
+            };
+            return fresh;
+          } finally {
+            authStoreReadInFlight = null;
+          }
+        })();
+        data = cloneAuthStore(await authStoreReadInFlight);
+      }
     } catch (e) {
       if (IS_VERCEL_RUNTIME) {
         console.error("Falha ao ler auth no Google Sheets no Vercel (sem fallback local):", e);
@@ -805,6 +894,10 @@ async function writeAuthStore(data: AuthStore) {
   }
   try {
     await writeAuthStoreGoogle(data);
+    authStoreCache = {
+      data: cloneAuthStore(data),
+      expiresAt: Date.now() + STORE_CACHE_TTL_MS,
+    };
   } catch (e) {
     if (IS_VERCEL_RUNTIME) {
       console.error("Falha ao gravar auth no Google Sheets no Vercel (sem fallback local):", e);
@@ -817,6 +910,87 @@ async function writeAuthStore(data: AuthStore) {
 
 function hashPassword(password: string, salt: string) {
   return crypto.pbkdf2Sync(password, salt, 100_000, 64, "sha512").toString("hex");
+}
+
+async function ensureClienteForUser(user: AuthUser, accountOwner?: AuthUser, loadedSheet?: SheetData) {
+  const owner = accountOwner || user;
+  const sheet = loadedSheet || await readSheetStore();
+  let cliente = sheet.clientes.find((c) => c.email.toLowerCase() === owner.email.toLowerCase());
+  if (!cliente) {
+    cliente = {
+      cliente_id: randomId("CL"),
+      nome: owner.name,
+      email: owner.email,
+      telefone: normalizePhone(owner.phone || ""),
+      status_conta: "aguardando_pagamento",
+      tipo_acesso: "email_senha",
+      plano_id: "",
+      serie_contratada: "",
+      creditos_disponiveis: 0,
+      creditos_utilizados: 0,
+      validade_ate: "",
+      pagamento_status: "pendente",
+      voucher_codigo: "",
+      data_cadastro: today(),
+      data_ultimo_pagamento: "",
+      observacao: "Criado via cadastro"
+    };
+    sheet.clientes.push(cliente);
+    await writeSheetStore(sheet);
+  } else if (!cliente.telefone && owner.phone) {
+    cliente.telefone = normalizePhone(owner.phone);
+    await writeSheetStore(sheet);
+  }
+  return cliente;
+}
+
+export interface AuthenticatedRequest extends express.Request {
+  authUser?: AuthUser;
+  authOwnerUser?: AuthUser;
+  authCliente?: ClienteRow;
+  authSheet?: SheetData;
+}
+
+export async function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const token = getToken(req);
+  if (!token) return res.status(401).json({ error: "Token ausente." });
+  const auth = await readAuthStore();
+  const session = auth.sessions.find((s) => s.token === token);
+  if (!session) return res.status(401).json({ error: "Sessao invalida ou expirada." });
+  const user = auth.users.find((u) => u.id === session.userId);
+  if (!user) return res.status(401).json({ error: "Usuario da sessao nao encontrado." });
+  if (user.status === "cancelado") return res.status(403).json({ error: "Conta cancelada. Contrate um plano para reativar." });
+  const ownerUser = auth.users.find((u) => u.id === (user.accountOwnerUserId || user.id)) || user;
+  req.authUser = user;
+  req.authOwnerUser = ownerUser;
+
+  const sheet = await readSheetStore();
+  req.authSheet = sheet;
+  req.authCliente = await ensureClienteForUser(user, ownerUser, sheet);
+  return next();
+}
+
+export async function requireCanGenerate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const cliente = req.authCliente;
+  if (!cliente) return res.status(401).json({ error: "Cliente nao encontrado para sessao atual." });
+  const sheet = req.authSheet || await readSheetStore();
+  const check = canGenerateFromCliente(cliente, sheet);
+  if (!check.canGenerate) {
+    return res.status(402).json({
+      error: "Conta sem permissao para gerar conteudo.",
+      reasons: check.reasons,
+      account: buildAccountStatus(cliente, sheet)
+    });
+  }
+  return next();
+}
+
+function normalizePaymentStatus(status: string) {
+  const normalized = (status || "").toLowerCase();
+  if (["confirmado", "received", "recebido", "paid", "pago"].includes(normalized)) return "confirmado";
+  if (["vencido", "overdue", "expired"].includes(normalized)) return "vencido";
+  if (["cancelado", "canceled", "cancelled"].includes(normalized)) return "cancelado";
+  return "pendente";
 }
 
 function normalizePhone(phone: string) {
@@ -918,38 +1092,6 @@ function appendAccountEvent(sheet: SheetData, params: {
   });
 }
 
-async function ensureClienteForUser(user: AuthUser, accountOwner?: AuthUser) {
-  const owner = accountOwner || user;
-  const sheet = await readSheetStore();
-  let cliente = sheet.clientes.find((c) => c.email.toLowerCase() === owner.email.toLowerCase());
-  if (!cliente) {
-    cliente = {
-      cliente_id: randomId("CL"),
-      nome: owner.name,
-      email: owner.email,
-      telefone: normalizePhone(owner.phone || ""),
-      status_conta: "aguardando_pagamento",
-      tipo_acesso: "email_senha",
-      plano_id: "",
-      serie_contratada: "",
-      creditos_disponiveis: 0,
-      creditos_utilizados: 0,
-      validade_ate: "",
-      pagamento_status: "pendente",
-      voucher_codigo: "",
-      data_cadastro: today(),
-      data_ultimo_pagamento: "",
-      observacao: "Criado via cadastro"
-    };
-    sheet.clientes.push(cliente);
-    await writeSheetStore(sheet);
-  } else if (!cliente.telefone && owner.phone) {
-    cliente.telefone = normalizePhone(owner.phone);
-    await writeSheetStore(sheet);
-  }
-  return cliente;
-}
-
 function canGenerateFromCliente(cliente: ClienteRow, sheet?: SheetData) {
   const allowedStatuses = new Set(["ativo", "gratuito", "voucher"]);
   const reasons: string[] = [];
@@ -981,52 +1123,6 @@ function canGenerateFromCliente(cliente: ClienteRow, sheet?: SheetData) {
   return { canGenerate, reasons };
 }
 
-export interface AuthenticatedRequest extends express.Request {
-  authUser?: AuthUser;
-  authOwnerUser?: AuthUser;
-  authCliente?: ClienteRow;
-  authSheet?: SheetData;
-}
-
-export async function requireAuth(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
-  const token = getToken(req);
-  if (!token) return res.status(401).json({ error: "Token ausente." });
-  const auth = await readAuthStore();
-  const session = auth.sessions.find((s) => s.token === token);
-  if (!session) return res.status(401).json({ error: "Sessao invalida ou expirada." });
-  const user = auth.users.find((u) => u.id === session.userId);
-  if (!user) return res.status(401).json({ error: "Usuario da sessao nao encontrado." });
-  if (user.status === "cancelado") return res.status(403).json({ error: "Conta cancelada. Contrate um plano para reativar." });
-  const ownerUser = auth.users.find((u) => u.id === (user.accountOwnerUserId || user.id)) || user;
-  req.authUser = user;
-  req.authOwnerUser = ownerUser;
-  req.authCliente = await ensureClienteForUser(user, ownerUser);
-  req.authSheet = await readSheetStore();
-  return next();
-}
-
-export async function requireCanGenerate(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
-  const cliente = req.authCliente;
-  if (!cliente) return res.status(401).json({ error: "Cliente nao encontrado para sessao atual." });
-  const sheet = req.authSheet || await readSheetStore();
-  const check = canGenerateFromCliente(cliente, sheet);
-  if (!check.canGenerate) {
-    return res.status(402).json({
-      error: "Conta sem permissao para gerar conteudo.",
-      reasons: check.reasons,
-      account: buildAccountStatus(cliente, sheet)
-    });
-  }
-  return next();
-}
-
-function normalizePaymentStatus(status: string) {
-  const normalized = (status || "").toLowerCase();
-  if (["confirmado", "received", "recebido", "paid", "pago"].includes(normalized)) return "confirmado";
-  if (["vencido", "overdue", "expired"].includes(normalized)) return "vencido";
-  if (["cancelado", "canceled", "cancelled"].includes(normalized)) return "cancelado";
-  return "pendente";
-}
 
 function hasUsedFreeOnce(cliente: ClienteRow) {
   return String(cliente.voucher_codigo || "")
@@ -1168,8 +1264,8 @@ export function registerAccessControlRoutes(app: express.Express) {
       auth.sessions.push(session);
       await writeAuthStore(auth);
 
-      const cliente = await ensureClienteForUser(user, user);
       const sheet = await readSheetStore();
+      const cliente = await ensureClienteForUser(user, user, sheet);
       const currentCliente = sheet.clientes.find((c) => c.cliente_id === cliente.cliente_id) || cliente;
       return res.json({
         success: true,
@@ -1198,8 +1294,8 @@ export function registerAccessControlRoutes(app: express.Express) {
       auth.sessions.push(session);
       await writeAuthStore(auth);
       const owner = auth.users.find((u) => u.id === (user.accountOwnerUserId || user.id)) || user;
-      const cliente = await ensureClienteForUser(user, owner);
       const sheet = await readSheetStore();
+      const cliente = await ensureClienteForUser(user, owner, sheet);
       const currentCliente = sheet.clientes.find((c) => c.cliente_id === cliente.cliente_id) || cliente;
       return res.json({
         success: true,
@@ -1333,7 +1429,7 @@ export function registerAccessControlRoutes(app: express.Express) {
     if (!isOwnerUser(req.authUser as AuthUser)) {
       return res.status(403).json({ error: "Apenas a conta principal pode ativar acesso gratuito." });
     }
-    const sheet = await readSheetStore();
+    const sheet = req.authSheet || await readSheetStore();
     const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
     if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
 
@@ -1375,7 +1471,7 @@ export function registerAccessControlRoutes(app: express.Express) {
     if (!isOwnerUser(req.authUser as AuthUser)) {
       return res.status(403).json({ error: "Apenas a conta principal pode cancelar a conta." });
     }
-    const sheet = await readSheetStore();
+    const sheet = req.authSheet || await readSheetStore();
     const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
     if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
 
@@ -1429,7 +1525,7 @@ export function registerAccessControlRoutes(app: express.Express) {
     const { planoId } = req.body || {};
     if (!planoId) return res.status(400).json({ error: "Campo obrigatorio: planoId." });
 
-    const sheet = await readSheetStore();
+    const sheet = req.authSheet || await readSheetStore();
     const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
     if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
     const plano = sheet.planos.find((p) => p.plano_id === planoId && (p.ativo || "").toLowerCase() === "sim");
@@ -1511,7 +1607,7 @@ export function registerAccessControlRoutes(app: express.Express) {
       return res.status(403).json({ error: "Apenas a conta principal pode cancelar pagamentos." });
     }
     const { pagamentoId } = req.body || {};
-    const sheet = await readSheetStore();
+    const sheet = req.authSheet || await readSheetStore();
     const cliente = sheet.clientes.find((c) => c.cliente_id === req.authCliente?.cliente_id);
     if (!cliente) return res.status(404).json({ error: "Cliente nao encontrado." });
 
