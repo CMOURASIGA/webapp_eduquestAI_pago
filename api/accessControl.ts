@@ -582,6 +582,36 @@ async function readSheetStoreGoogle(): Promise<SheetData> {
   return data;
 }
 
+export async function diagnoseGoogleSheetsPersistence() {
+  const configured = canUseGoogleSheets();
+  if (!configured) {
+    return {
+      configured: false,
+      mode: IS_VERCEL_RUNTIME ? "misconfigured_no_persistent_store" : "local_file",
+      ok: !IS_VERCEL_RUNTIME,
+      error: IS_VERCEL_RUNTIME ? "GOOGLE_SHEET_ID/GOOGLE_SERVICE_ACCOUNT_JSON ausentes." : "",
+    };
+  }
+
+  try {
+    await readAuthStoreGoogle();
+    await readSheetStoreGoogle();
+    return {
+      configured: true,
+      mode: "google_sheets",
+      ok: true,
+      error: "",
+    };
+  } catch (e: any) {
+    return {
+      configured: true,
+      mode: "google_sheets",
+      ok: false,
+      error: String(e?.message || e || "Falha ao conectar no Google Sheets."),
+    };
+  }
+}
+
 async function writeSheetStoreGoogle(data: SheetData) {
   await writeTab("clientes", CLIENTES_HEADERS, data.clientes as any[]);
   await writeTab("planos", PLANOS_HEADERS, data.planos as any[]);

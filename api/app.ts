@@ -12,6 +12,7 @@ import {
   requireCanGenerate,
   applyConsumption,
   getQuestionPolicyForRequest,
+  diagnoseGoogleSheetsPersistence,
   type AuthenticatedRequest,
   getAuthFromRequest
 } from "./accessControl.js";
@@ -90,14 +91,16 @@ function writeAnswers(data: any[]) {
   }
 }
 
-app.get("/api/health/full", (_req, res) => {
-  const googleConfigured = Boolean((process.env.GOOGLE_SHEET_ID || "").trim() && (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim());
+app.get("/api/health/full", async (_req, res) => {
+  const storage = await diagnoseGoogleSheetsPersistence();
   res.json({
     status: "ok",
     openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
     geminiEnabled: false,
-    googleSheetsConfigured: googleConfigured,
-    authStorageMode: googleConfigured ? "google_sheets" : (process.env.VERCEL ? "misconfigured_no_persistent_store" : "local_file"),
+    googleSheetsConfigured: storage.configured,
+    authStorageMode: storage.mode,
+    googleSheetsConnectionOk: storage.ok,
+    googleSheetsConnectionError: storage.error || null,
     nodeEnv: process.env.NODE_ENV || "development",
     vercel: Boolean(process.env.VERCEL)
   });
