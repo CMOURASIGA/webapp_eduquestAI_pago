@@ -71,6 +71,26 @@ export const PlanosPage: React.FC = () => {
     });
   }, [plans]);
 
+  const getPlanGuidance = (planoId: string) => {
+    const id = String(planoId || '').toUpperCase();
+    if (id === 'FREE_ONCE') {
+      return 'Experimente a ferramenta sem custo e gere sua primeira prova. Ideal para conhecer a qualidade das questoes e entender como o sistema funciona. Disponivel uma unica vez por conta.';
+    }
+    if (id === 'FREE40') {
+      return 'Opcao de entrada para continuar apos o teste gratuito, sem contratar pacote maior. Indicado para gerar ate 40 questoes, ideal para atividade pontual com baixo investimento.';
+    }
+    if (id === 'PRE100') {
+      return 'Plano para uso mais frequente, porem moderado. Permite gerar ate 100 questoes, com bom custo-beneficio para montar mais de uma atividade.';
+    }
+    if (id === 'PRE300') {
+      return 'Plano para uso constante e maior economia por questao. Ideal para montar varias provas, listas e atividades com mais volume.';
+    }
+    if (id === 'ANUAL_GERAL') {
+      return 'Plano com acesso continuo durante todo o ano, com previsibilidade e praticidade. Melhor opcao para uso recorrente da plataforma na rotina escolar.';
+    }
+    return null;
+  };
+
   const handleActivateFree = async () => {
     if (!authToken) return;
     setError(null);
@@ -215,6 +235,11 @@ export const PlanosPage: React.FC = () => {
                 <p><strong>Serie:</strong> {displayPlanSerie(plan)}</p>
                 {plan.descricao ? <p>{plan.descricao}</p> : null}
               </div>
+              {getPlanGuidance(plan.plano_id) && (
+                <div className="text-xs text-slate-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                  {getPlanGuidance(plan.plano_id)}
+                </div>
+              )}
               <Button
                 type="button"
                 onClick={() => handleContract(plan.plano_id)}

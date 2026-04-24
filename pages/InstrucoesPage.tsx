@@ -33,6 +33,13 @@ export const InstrucoesPage: React.FC = () => {
             <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>Planos tipo voucher podem ter limite menor de questoes por prova (ex.: 20).</span></li>
             <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>Todos os eventos de cancelamento e alteracoes de status ficam registrados em planilha.</span></li>
           </ul>
+          <div className="mt-4 space-y-2 text-xs text-slate-700">
+            <p><strong>FREE_ONCE - Teste Gratuito:</strong> Experimente sem custo e gere sua primeira prova. Ideal para conhecer a qualidade das questoes e o funcionamento da plataforma. Disponivel uma unica vez por conta.</p>
+            <p><strong>FREE40 - Pacote Inicial:</strong> Opcao de entrada para continuar apos o teste gratuito, sem contratar pacote maior. Indicado para gerar ate 40 questoes com baixo investimento.</p>
+            <p><strong>PRE100 - Pacote 100 Questoes:</strong> Plano para uso mais frequente de forma moderada. Permite ate 100 questoes e melhor custo-beneficio que o pacote inicial.</p>
+            <p><strong>PRE300 - Pacote 300 Questoes:</strong> Plano para uso constante, com maior economia por questao. Ideal para mais volume de provas, listas e atividades.</p>
+            <p><strong>ANUAL_GERAL - Plano Anual:</strong> Acesso continuo durante todo o ano, com previsibilidade e praticidade. Melhor opcao para uso recorrente na rotina escolar.</p>
+          </div>
         </section>
 
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
