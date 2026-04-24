@@ -132,12 +132,12 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
     });
 
     const contentType = response.headers.get('content-type') || '';
+    let nonJsonBody = '';
     if (contentType.includes('application/json')) {
       data = await response.json();
     } else {
-      const text = await response.text();
-      console.error('Resposta nao-JSON recebida:', text);
-      throw new Error(`O servidor retornou uma resposta inesperada (nao-JSON). Detalhes: ${text.substring(0, 100)}...`);
+      nonJsonBody = await response.text();
+      data = { error: 'Resposta inesperada do servidor.', details: nonJsonBody.slice(0, 240) };
     }
 
     if (response.ok) break;
@@ -152,6 +152,9 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
 
     if (response.status === 429) {
       throw new Error('Limite temporario de requisicoes (429). Aguarde alguns segundos e tente novamente.');
+    }
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Servidor retornou ${response.status} em formato nao-JSON. Detalhes: ${nonJsonBody.slice(0, 120)}...`);
     }
     throw new Error(data?.error || data?.details || 'Erro desconhecido ao gerar a prova com OpenAI.');
   }
@@ -236,7 +239,7 @@ function extractInvalidQuestionIndex(message: string) {
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {
   try {
     const totalQuestions = Math.max(1, Number(params.questionCount || QUESTIONS_PER_EXAM));
-    const batchSize = Math.min(12, Math.max(8, Math.ceil(totalQuestions / 4)));
+    const batchSize = Math.min(8, Math.max(5, Math.ceil(totalQuestions / 5)));
     const batches: { offset: number; count: number }[] = [];
     for (let offset = 0; offset < totalQuestions; offset += batchSize) {
       batches.push({ offset, count: Math.min(batchSize, totalQuestions - offset) });
