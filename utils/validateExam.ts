@@ -8,6 +8,8 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
   }
 
   exam.questions.forEach((q, idx) => {
+    const expectedLabels = ['A', 'B', 'C', 'D', 'E'];
+
     if (!q.enunciado || q.enunciado.trim().length < 15) {
       throw new Error(`Questao ${idx + 1} invalida: enunciado insuficiente.`);
     }
@@ -15,6 +17,32 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
     if (!q.alternativas || q.alternativas.length !== 5) {
       throw new Error(`Questao ${idx + 1} invalida: deve conter 5 alternativas.`);
     }
+
+    // Sanitiza alternativas para evitar falha por resposta incompleta da IA.
+    const oldAlternativas = q.alternativas.map((a) => ({
+      id: String(a.id || '').trim(),
+      label: String(a.label || '').trim().toUpperCase(),
+      texto: String(a.texto || '').trim()
+    }));
+    const requestedCorreta = String(q.alternativaCorretaId || '').trim();
+    q.alternativas = expectedLabels.map((label, altIdx) => {
+      const src = oldAlternativas[altIdx] || { id: '', label: '', texto: '' };
+      return {
+        ...q.alternativas[altIdx],
+        id: label,
+        label,
+        texto: src.texto || `Opcao ${label}`
+      };
+    });
+
+    const indexByOriginalId = oldAlternativas.findIndex((a) => a.id && a.id === requestedCorreta);
+    const indexByOriginalLabel = oldAlternativas.findIndex((a) => a.label && a.label === requestedCorreta.toUpperCase());
+    const indexByRequestedLabel = expectedLabels.indexOf(requestedCorreta.toUpperCase());
+    const chosenIndex =
+      indexByOriginalId >= 0 ? indexByOriginalId :
+      indexByOriginalLabel >= 0 ? indexByOriginalLabel :
+      indexByRequestedLabel >= 0 ? indexByRequestedLabel : 0;
+    q.alternativaCorretaId = expectedLabels[chosenIndex];
 
     const optionIds = q.alternativas.map((a) => (a.id || '').toString().trim());
     const optionLabels = q.alternativas.map((a) => (a.label || '').toString().trim().toUpperCase());
@@ -24,7 +52,6 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
       throw new Error(`Questao ${idx + 1} invalida: alternativas com IDs duplicados.`);
     }
 
-    const expectedLabels = ['A', 'B', 'C', 'D', 'E'];
     const uniqueLabels = new Set(optionLabels);
     if (uniqueLabels.size !== 5 || expectedLabels.some((label) => !uniqueLabels.has(label))) {
       throw new Error(`Questao ${idx + 1} invalida: alternativas devem usar labels unicos A, B, C, D e E.`);
