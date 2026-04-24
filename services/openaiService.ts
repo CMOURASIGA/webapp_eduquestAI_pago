@@ -1,4 +1,4 @@
-import { Exam, Question, SerieEscolar } from '../types/exam';
+﻿import { Exam, Question, SerieEscolar } from '../types/exam';
 import { buildExamGenerationPrompt } from '../utils/examGenerationPromptBuilder';
 import { extractJSON } from '../utils/parseAIResponse';
 import { validateExam } from '../utils/validateExam';
@@ -6,7 +6,6 @@ import { QUESTIONS_PER_EXAM } from '../utils/examConfig';
 
 function ensureUniqueIds(questions: Question[]) {
   questions.forEach((q, index) => {
-    // Força ids previsíveis e únicos mesmo em geração por lotes
     q.id = `q${index + 1}`;
     q.alternativas = q.alternativas.map((alt, altIdx) => ({
       ...alt,
@@ -20,7 +19,7 @@ function ensureOnTopic(questions: Question[], conteudoBase: string[]) {
   const keywords = Array.from(
     new Set(
       text
-        .split(/[^a-zà-úÀ-Ú0-9]+/i)
+        .split(/[^a-z\u00e0-\u00fa\u00c0-\u00da0-9]+/i)
         .filter((w) => w && w.length >= 4)
     )
   ).slice(0, 30);
@@ -31,20 +30,20 @@ function ensureOnTopic(questions: Question[], conteudoBase: string[]) {
     const en = (q.enunciado || '').toLowerCase();
     const hasKeyword = keywords.some((kw) => en.includes(kw));
     if (!hasKeyword) {
-      console.warn(`Questão ${idx + 1} pode não mencionar diretamente o conteúdo base (sem palavra-chave detectada).`);
+      console.warn(`Questao ${idx + 1} pode nao mencionar diretamente o conteudo base (sem palavra-chave detectada).`);
     }
   });
 }
 
-const normalizeAlternativas = (alts: any): Question["alternativas"] => {
+const normalizeAlternativas = (alts: any): Question['alternativas'] => {
   if (Array.isArray(alts)) {
     return alts.map((alt: any, idx: number) => {
       const fallbackLabel = String.fromCharCode(65 + idx);
       const texto =
-        typeof alt === "string"
+        typeof alt === 'string'
           ? alt
-          : alt?.texto || alt?.text || "";
-      const normalizedText = String(texto || "").trim();
+          : alt?.texto || alt?.text || '';
+      const normalizedText = String(texto || '').trim();
       return {
         id: (alt as any)?.id || (alt as any)?.label || fallbackLabel,
         label: (alt as any)?.label || fallbackLabel,
@@ -52,14 +51,14 @@ const normalizeAlternativas = (alts: any): Question["alternativas"] => {
       };
     });
   }
-  if (alts && typeof alts === "object") {
+  if (alts && typeof alts === 'object') {
     return Object.entries(alts).map(([key, val]: any, idx: number) => {
       const fallbackLabel = String.fromCharCode(65 + idx);
       const texto =
-        typeof val === "string"
+        typeof val === 'string'
           ? val
-          : val?.texto || val?.text || "";
-      const normalizedText = String(texto || "").trim();
+          : val?.texto || val?.text || '';
+      const normalizedText = String(texto || '').trim();
       return {
         id: val?.id || val?.label || key || fallbackLabel,
         label: val?.label || key || fallbackLabel,
@@ -70,11 +69,11 @@ const normalizeAlternativas = (alts: any): Question["alternativas"] => {
   return [];
 };
 
-const ensureFiveAlternativas = (alternativas: Question["alternativas"]): Question["alternativas"] => {
-  const labels = ["A", "B", "C", "D", "E"];
+const ensureFiveAlternativas = (alternativas: Question['alternativas']): Question['alternativas'] => {
+  const labels = ['A', 'B', 'C', 'D', 'E'];
   return labels.map((label, idx) => {
     const source = alternativas[idx] as any;
-    const texto = String(source?.texto || "").trim();
+    const texto = String(source?.texto || '').trim();
     return {
       id: String(source?.id || source?.label || label),
       label,
@@ -85,51 +84,80 @@ const ensureFiveAlternativas = (alternativas: Question["alternativas"]): Questio
 
 const resolveCorretaId = (
   alternativaCorretaIdRaw: any,
-  alternativas: Question["alternativas"]
+  alternativas: Question['alternativas']
 ) => {
-  const requested = String(alternativaCorretaIdRaw || "").trim();
-  if (!requested) return alternativas[0]?.id || "A";
+  const requested = String(alternativaCorretaIdRaw || '').trim();
+  if (!requested) return alternativas[0]?.id || 'A';
   const byId = alternativas.find((a) => a.id === requested);
   if (byId) return byId.id;
-  const byLabel = alternativas.find((a) => String(a.label || "").toUpperCase() === requested.toUpperCase());
+  const byLabel = alternativas.find((a) => String(a.label || '').toUpperCase() === requested.toUpperCase());
   if (byLabel) return byLabel.id;
-  return alternativas[0]?.id || "A";
+  return alternativas[0]?.id || 'A';
 };
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function parseRetryAfterMs(headerValue: string | null) {
+  if (!headerValue) return 0;
+  const asNumber = Number(headerValue);
+  if (Number.isFinite(asNumber) && asNumber > 0) return asNumber * 1000;
+  const asDate = new Date(headerValue).getTime();
+  if (Number.isFinite(asDate)) {
+    const delta = asDate - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+  return 0;
+}
 
 async function callOpenAIBatch(params: GenerateParams, offset: number, count: number): Promise<Question[]> {
   const prompt = buildExamGenerationPrompt({ ...params, questionsCount: count, questionOffset: offset });
-  const response = await fetch('/api/openai/generate', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(params.authToken ? { Authorization: `Bearer ${params.authToken}` } : {}),
-    },
-    body: JSON.stringify({
-      modelName: params.modelName || 'gpt-4o-mini',
-      prompt: prompt,
-      disciplina: params.disciplina,
-      conteudoBase: params.conteudoBase,
-      questionCount: count,
-      questionOffset: offset
-    })
-  });
+  const maxAttempts = 5;
+  let data: any = null;
 
-  const contentType = response.headers.get('content-type');
-  let data;
-  if (contentType && contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
-    console.error("Resposta não-JSON recebida:", text);
-    throw new Error(`O servidor retornou uma resposta inesperada (não-JSON). Isso geralmente acontece por timeout ou erro interno no Vercel. Detalhes: ${text.substring(0, 100)}...`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await fetch('/api/openai/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(params.authToken ? { Authorization: `Bearer ${params.authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        modelName: params.modelName || 'gpt-4o-mini',
+        prompt,
+        disciplina: params.disciplina,
+        conteudoBase: params.conteudoBase,
+        questionCount: count,
+        questionOffset: offset
+      })
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error('Resposta nao-JSON recebida:', text);
+      throw new Error(`O servidor retornou uma resposta inesperada (nao-JSON). Detalhes: ${text.substring(0, 100)}...`);
+    }
+
+    if (response.ok) break;
+
+    const retryable = [429, 500, 502, 503, 504].includes(response.status);
+    if (retryable && attempt < maxAttempts) {
+      const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+      const backoffMs = retryAfterMs || (1200 * Math.pow(2, attempt - 1));
+      await sleep(backoffMs);
+      continue;
+    }
+
+    if (response.status === 429) {
+      throw new Error('Limite temporario de requisicoes (429). Aguarde alguns segundos e tente novamente.');
+    }
+    throw new Error(data?.error || data?.details || 'Erro desconhecido ao gerar a prova com OpenAI.');
   }
 
-  if (!response.ok) {
-    throw new Error(data.error || data.details || 'Erro desconhecido ao gerar a prova com OpenAI.');
-  }
-
-  if (!data.result) {
-    throw new Error("A OpenAI retornou uma resposta vazia.");
+  if (!data?.result) {
+    throw new Error('A OpenAI retornou uma resposta vazia.');
   }
 
   let jsonString = data.result;
@@ -150,7 +178,7 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
     const alternativaCorretaId = resolveCorretaId(alternativaCorretaIdRaw, alternativas);
 
     if (!q.enunciado || alternativas.length < 2 || !alternativaCorretaId) {
-      throw new Error(`A IA retornou uma questão incompleta (questão ${idx + 1 + offset}). Tente gerar novamente com um conteúdo base diferente ou modelo diferente.`);
+      throw new Error(`A IA retornou uma questao incompleta (questao ${idx + 1 + offset}). Tente gerar novamente.`);
     }
 
     return {
@@ -191,14 +219,14 @@ interface GenerateParams {
   disciplina: string;
   objetivo: string;
   conteudoBase: string[];
-  nivelDificuldade: "baixa" | "media" | "alta";
+  nivelDificuldade: 'baixa' | 'media' | 'alta';
   modelName: string;
   authToken?: string;
   questionCount?: number;
 }
 
 function extractInvalidQuestionIndex(message: string) {
-  const match = String(message || "").match(/Questao\s+(\d+)\s+invalida/i);
+  const match = String(message || '').match(/Questao\s+(\d+)\s+invalida/i);
   if (!match) return -1;
   const oneBased = Number(match[1]);
   if (!Number.isFinite(oneBased) || oneBased <= 0) return -1;
@@ -208,8 +236,7 @@ function extractInvalidQuestionIndex(message: string) {
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {
   try {
     const totalQuestions = Math.max(1, Number(params.questionCount || QUESTIONS_PER_EXAM));
-    // Lotes menores para reduzir tempo de cada chamada (Vercel timeout 60s)
-    const batchSize = Math.min(8, Math.max(5, Math.ceil(totalQuestions / 5)));
+    const batchSize = Math.min(12, Math.max(8, Math.ceil(totalQuestions / 4)));
     const batches: { offset: number; count: number }[] = [];
     for (let offset = 0; offset < totalQuestions; offset += batchSize) {
       batches.push({ offset, count: Math.min(batchSize, totalQuestions - offset) });
@@ -226,7 +253,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       createdAt: new Date().toISOString()
     };
 
-    const maxRepairAttempts = Math.max(8, Math.ceil(totalQuestions / 2));
+    const maxRepairAttempts = 4;
     for (let attempt = 0; attempt <= maxRepairAttempts; attempt += 1) {
       ensureOnTopic(examResult.questions as Question[], params.conteudoBase);
       ensureUniqueIds(examResult.questions as Question[]);
@@ -234,7 +261,7 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
         validateExam(examResult as any);
         return examResult;
       } catch (validationError: any) {
-        const message = String(validationError?.message || validationError || "");
+        const message = String(validationError?.message || validationError || '');
         const invalidIdx = extractInvalidQuestionIndex(message);
         if (invalidIdx < 0 || invalidIdx >= examResult.questions.length || attempt >= maxRepairAttempts) {
           throw validationError;
@@ -248,9 +275,9 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       }
     }
 
-    throw new Error("Falha inesperada ao validar prova gerada.");
+    throw new Error('Falha inesperada ao validar prova gerada.');
   } catch (error: any) {
-    console.error("Falha na validação da prova gerada:", error);
-    throw new Error(error.message || "Erro desconhecido ao gerar a prova.");
+    console.error('Falha na validacao da prova gerada:', error);
+    throw new Error(error.message || 'Erro desconhecido ao gerar a prova.');
   }
 }

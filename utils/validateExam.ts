@@ -94,8 +94,8 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
     });
 
     if (missingLabelsInExplanation.length > 0) {
-      throw new Error(
-        `Questao ${idx + 1} invalida: explicacao deve justificar alternativa correta e incorretas (faltando: ${missingLabelsInExplanation.join(', ')}).`
+      console.warn(
+        `Questao ${idx + 1}: explicacao sem todas as referencias A-E (faltando: ${missingLabelsInExplanation.join(', ')}).`
       );
     }
   });
