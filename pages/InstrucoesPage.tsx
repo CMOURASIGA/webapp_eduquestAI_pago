@@ -36,8 +36,8 @@ export const InstrucoesPage: React.FC = () => {
           <div className="mt-4 space-y-2 text-xs text-slate-700">
             <p><strong>FREE_ONCE - Teste Gratuito:</strong> Experimente sem custo e gere sua primeira prova. Ideal para conhecer a qualidade das questoes e o funcionamento da plataforma. Disponivel uma unica vez por conta.</p>
             <p><strong>FREE40 - Pacote Inicial:</strong> Opcao de entrada para continuar apos o teste gratuito, sem contratar pacote maior. Indicado para gerar ate 40 questoes com baixo investimento.</p>
-            <p><strong>PRE100 - Pacote 100 Questoes:</strong> Plano para uso mais frequente de forma moderada. Permite ate 100 questoes e melhor custo-beneficio que o pacote inicial.</p>
-            <p><strong>PRE300 - Pacote 300 Questoes:</strong> Plano para uso constante, com maior economia por questao. Ideal para mais volume de provas, listas e atividades.</p>
+            <p><strong>PRE100 - Pacote 120 Creditos (3 provas):</strong> Pacote com 120 creditos, equivalente a 3 provas de 40 questoes. Indicado para uso moderado com melhor custo-beneficio que o pacote inicial.</p>
+            <p><strong>PRE300 - Pacote 360 Creditos (9 provas):</strong> Pacote com 360 creditos, equivalente a 9 provas de 40 questoes. Ideal para uso constante e maior volume de atividades.</p>
             <p><strong>ANUAL_GERAL - Plano Anual:</strong> Acesso continuo durante todo o ano, com previsibilidade e praticidade. Melhor opcao para uso recorrente na rotina escolar.</p>
           </div>
         </section>

@@ -80,10 +80,10 @@ export const PlanosPage: React.FC = () => {
       return 'Opcao de entrada para continuar apos o teste gratuito, sem contratar pacote maior. Indicado para gerar ate 40 questoes, ideal para atividade pontual com baixo investimento.';
     }
     if (id === 'PRE100') {
-      return 'Plano para uso mais frequente, porem moderado. Permite gerar ate 100 questoes, com bom custo-beneficio para montar mais de uma atividade.';
+      return 'Pacote com 120 creditos, equivalente a 3 provas de 40 questoes. Indicado para uso frequente moderado, com melhor custo-beneficio que o pacote inicial.';
     }
     if (id === 'PRE300') {
-      return 'Plano para uso constante e maior economia por questao. Ideal para montar varias provas, listas e atividades com mais volume.';
+      return 'Pacote com 360 creditos, equivalente a 9 provas de 40 questoes. Ideal para uso constante, com maior economia por questao e mais volume de atividades.';
     }
     if (id === 'ANUAL_GERAL') {
       return 'Plano com acesso continuo durante todo o ano, com previsibilidade e praticidade. Melhor opcao para uso recorrente da plataforma na rotina escolar.';
