@@ -24,6 +24,12 @@ export const app = express();
 const PORT = 3000;
 const WRITABLE_ROOT = process.env.VERCEL ? "/tmp" : process.cwd();
 const LOGS_DIR = path.resolve(WRITABLE_ROOT, "logs");
+const BUILD_VERSION =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  "local-dev";
+const BUILD_TIME = new Date().toISOString();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -97,6 +103,8 @@ app.get("/api/health/full", async (_req, res) => {
   const sheetsMetrics = getGoogleSheetsMetrics();
   res.json({
     status: "ok",
+    buildVersion: String(BUILD_VERSION).slice(0, 12),
+    buildTime: BUILD_TIME,
     openaiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
     geminiEnabled: false,
     googleSheetsConfigured: storage.configured,

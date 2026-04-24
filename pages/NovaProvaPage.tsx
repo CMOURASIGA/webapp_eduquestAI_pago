@@ -28,6 +28,7 @@ export const NovaProvaPage: React.FC = () => {
   const [releaseNotice, setReleaseNotice] = useState<string | null>(null);
   const [billingMode, setBillingMode] = useState<'pix_manual' | 'teste'>('teste');
   const [simulationEnabled, setSimulationEnabled] = useState(true);
+  const [buildVersion, setBuildVersion] = useState<string>('');
 
   const [formData, setFormData] = useState({
     title: '',
@@ -88,6 +89,15 @@ export const NovaProvaPage: React.FC = () => {
       if (isSessionError(err?.message)) await forceRelogin();
     });
   }, [authToken]);
+
+  useEffect(() => {
+    fetch('/api/health/full')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.buildVersion) setBuildVersion(String(data.buildVersion));
+      })
+      .catch(() => {});
+  }, []);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +275,9 @@ export const NovaProvaPage: React.FC = () => {
         <div>
           <h1 className="text-3xl font-black text-slate-800">Criar Material de Estudo</h1>
           <p className="text-slate-500">Simulado de {questionsPerExam} questoes com controle de creditos.</p>
+          {buildVersion && (
+            <p className="text-xs text-slate-400 mt-1">Build: {buildVersion}</p>
+          )}
         </div>
         <div className="hidden md:flex p-3 rounded-2xl bg-indigo-100 text-indigo-600">
           <BrainCircuit size={32} />
