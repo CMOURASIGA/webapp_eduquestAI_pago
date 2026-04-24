@@ -197,6 +197,14 @@ interface GenerateParams {
   questionCount?: number;
 }
 
+function extractInvalidQuestionIndex(message: string) {
+  const match = String(message || "").match(/Questao\s+(\d+)\s+invalida/i);
+  if (!match) return -1;
+  const oneBased = Number(match[1]);
+  if (!Number.isFinite(oneBased) || oneBased <= 0) return -1;
+  return oneBased - 1;
+}
+
 export async function generateExamWithOpenAI(params: GenerateParams): Promise<Partial<Exam>> {
   try {
     const totalQuestions = Math.max(1, Number(params.questionCount || QUESTIONS_PER_EXAM));
@@ -218,11 +226,29 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
       createdAt: new Date().toISOString()
     };
 
-    ensureOnTopic(examResult.questions as Question[], params.conteudoBase);
-    ensureUniqueIds(examResult.questions as Question[]);
-    validateExam(examResult as any);
+    const maxRepairAttempts = Math.max(8, Math.ceil(totalQuestions / 2));
+    for (let attempt = 0; attempt <= maxRepairAttempts; attempt += 1) {
+      ensureOnTopic(examResult.questions as Question[], params.conteudoBase);
+      ensureUniqueIds(examResult.questions as Question[]);
+      try {
+        validateExam(examResult as any);
+        return examResult;
+      } catch (validationError: any) {
+        const message = String(validationError?.message || validationError || "");
+        const invalidIdx = extractInvalidQuestionIndex(message);
+        if (invalidIdx < 0 || invalidIdx >= examResult.questions.length || attempt >= maxRepairAttempts) {
+          throw validationError;
+        }
+        console.warn(`Questao invalida detectada (idx=${invalidIdx}). Regenerando somente essa questao...`);
+        const regenerated = await callOpenAIBatch(params, invalidIdx, 1);
+        if (!regenerated || regenerated.length === 0) {
+          throw validationError;
+        }
+        examResult.questions[invalidIdx] = regenerated[0];
+      }
+    }
 
-    return examResult;
+    throw new Error("Falha inesperada ao validar prova gerada.");
   } catch (error: any) {
     console.error("Falha na validação da prova gerada:", error);
     throw new Error(error.message || "Erro desconhecido ao gerar a prova.");
