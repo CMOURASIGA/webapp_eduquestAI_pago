@@ -1,44 +1,16 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { Button } from '../components/ui/Button';
-import { AlertCircle, CheckCircle2, XCircle, Users, UserPlus, Trash2 } from 'lucide-react';
-import { createSubaccount, deleteSubaccount, fetchSubaccounts, Subaccount } from '../services/authService';
+import { AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { testOpenAIConnection } from '../services/openaiService';
 
 export const ConfigGeminiPage: React.FC = () => {
-  const { selectedModel, setSelectedModel, authToken, userProfile } = useGeminiConfig();
+  const { selectedModel, setSelectedModel, authToken } = useGeminiConfig();
 
   const [model, setModel] = useState(selectedModel);
   const [saved, setSaved] = useState(false);
   const [testingOpenAI, setTestingOpenAI] = useState(false);
   const [openAIResult, setOpenAIResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
-
-  const [subaccounts, setSubaccounts] = useState<Subaccount[]>([]);
-  const [subName, setSubName] = useState('');
-  const [subUsername, setSubUsername] = useState('');
-  const [subPassword, setSubPassword] = useState('');
-  const [loadingSubs, setLoadingSubs] = useState(false);
-  const [subError, setSubError] = useState<string | null>(null);
-
-  const isMainOwner = userProfile?.role === 'professor';
-
-  const loadSubaccounts = async () => {
-    if (!authToken || !isMainOwner) return;
-    setLoadingSubs(true);
-    setSubError(null);
-    try {
-      const list = await fetchSubaccounts(authToken);
-      setSubaccounts(list);
-    } catch (err: any) {
-      setSubError(err?.message || 'Falha ao carregar subcadastros.');
-    } finally {
-      setLoadingSubs(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSubaccounts();
-  }, [authToken, isMainOwner]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,35 +25,6 @@ export const ConfigGeminiPage: React.FC = () => {
     const result = await testOpenAIConnection(authToken);
     setOpenAIResult(result);
     setTestingOpenAI(false);
-  };
-
-  const handleCreateSub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authToken) return;
-    setSubError(null);
-    try {
-      await createSubaccount(authToken, {
-        name: subName.trim(),
-        username: subUsername.trim(),
-        password: subPassword,
-      });
-      setSubName('');
-      setSubUsername('');
-      setSubPassword('');
-      await loadSubaccounts();
-    } catch (err: any) {
-      setSubError(err?.message || 'Falha ao criar subcadastro.');
-    }
-  };
-
-  const handleDeleteSub = async (id: string) => {
-    if (!authToken) return;
-    try {
-      await deleteSubaccount(authToken, id);
-      await loadSubaccounts();
-    } catch (err: any) {
-      setSubError(err?.message || 'Falha ao remover subcadastro.');
-    }
   };
 
   return (
@@ -148,61 +91,6 @@ export const ConfigGeminiPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      {isMainOwner && (
-        <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 space-y-6">
-          <h2 className="text-xl font-bold text-slate-800 border-b pb-2 flex items-center gap-2"><Users size={20} /> Subcadastros de Aluno</h2>
-
-          <form onSubmit={handleCreateSub} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input
-              required
-              value={subName}
-              onChange={(e) => setSubName(e.target.value)}
-              className="px-4 py-3 rounded-xl border border-slate-200"
-              placeholder="Nome do aluno"
-            />
-            <input
-              required
-              value={subUsername}
-              onChange={(e) => setSubUsername(e.target.value)}
-              className="px-4 py-3 rounded-xl border border-slate-200"
-              placeholder="Usuario do aluno"
-            />
-            <input
-              required
-              minLength={6}
-              type="password"
-              value={subPassword}
-              onChange={(e) => setSubPassword(e.target.value)}
-              className="px-4 py-3 rounded-xl border border-slate-200"
-              placeholder="Senha (min. 6)"
-            />
-            <div className="md:col-span-3">
-              <Button type="submit" className="w-full"><UserPlus size={16} /> Criar subcadastro</Button>
-            </div>
-          </form>
-
-          {subError && (
-            <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">{subError}</div>
-          )}
-
-          <div className="space-y-2">
-            {loadingSubs && <p className="text-sm text-slate-500">Carregando subcadastros...</p>}
-            {!loadingSubs && subaccounts.length === 0 && <p className="text-sm text-slate-500">Nenhum subcadastro criado.</p>}
-            {subaccounts.map((sub) => (
-              <div key={sub.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
-                <div>
-                  <p className="font-bold text-slate-800">{sub.name}</p>
-                  <p className="text-xs text-slate-500">Usuario: {sub.username}</p>
-                </div>
-                <Button type="button" variant="outline" onClick={() => handleDeleteSub(sub.id)}>
-                  <Trash2 size={14} /> Remover
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

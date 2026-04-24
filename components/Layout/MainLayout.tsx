@@ -13,7 +13,8 @@ import {
   HelpCircle,
   LogOut,
   Settings,
-  Wallet
+  Wallet,
+  Users
 } from 'lucide-react';
 
 export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -26,6 +27,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
     { label: 'Dashboard', path: '/', icon: LayoutDashboard },
     { label: 'Nova Prova', path: '/nova-prova', icon: PlusCircle, professorOnly: true },
     { label: 'Planos', path: '/planos', icon: Wallet },
+    { label: 'Conta', path: '/conta', icon: Users, professorOnly: true },
     { label: 'Provas Salvas', path: '/provas', icon: FileText },
     { label: 'Instrucoes', path: '/instrucoes', icon: HelpCircle, professorOnly: true },
     { label: 'Configuracoes', path: '/config-gemini', icon: Settings, professorOnly: true },

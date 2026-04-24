@@ -13,6 +13,7 @@ import { InstrucoesPage } from './pages/InstrucoesPage';
 import { LoginPage } from './pages/LoginPage';
 import { ConfigGeminiPage } from './pages/ConfigGeminiPage';
 import { PlanosPage } from './pages/PlanosPage';
+import { ContaPage } from './pages/ContaPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile, authLoading } = useGeminiConfig();
@@ -59,6 +60,11 @@ const App: React.FC = () => {
           <Route path="/planos" element={
             <ProtectedRoute>
               <PlanosPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/conta" element={
+            <ProtectedRoute>
+              <ContaPage />
             </ProtectedRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />

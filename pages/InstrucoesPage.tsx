@@ -19,7 +19,8 @@ export const InstrucoesPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-800 mb-3">1. Cadastro e acesso</h2>
           <ul className="space-y-2 text-sm text-slate-600">
             <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>O cadastro principal e unico (email + telefone + senha).</span></li>
-            <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>Subcadastros de aluno sao criados em <strong>Configuracoes</strong> e usam <strong>usuario + senha</strong>.</span></li>
+            <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>Subcadastros de aluno sao criados em <strong>Conta</strong> e usam <strong>usuario + senha</strong>.</span></li>
+            <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>Caminho no menu: <strong>Conta - Subcadastros de Aluno - Criar subcadastro</strong>.</span></li>
             <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-500 mt-0.5" /><span>O plano contratado vale para a conta principal e para seus subcadastros.</span></li>
           </ul>
         </section>
