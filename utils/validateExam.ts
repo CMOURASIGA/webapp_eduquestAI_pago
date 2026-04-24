@@ -27,11 +27,12 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
     const requestedCorreta = String(q.alternativaCorretaId || '').trim();
     q.alternativas = expectedLabels.map((label, altIdx) => {
       const src = oldAlternativas[altIdx] || { id: '', label: '', texto: '' };
+      const safeTexto = src.texto && src.texto.trim().length >= 2 ? src.texto.trim() : `Opcao ${label}`;
       return {
         ...q.alternativas[altIdx],
         id: label,
         label,
-        texto: src.texto || `Opcao ${label}`
+        texto: safeTexto
       };
     });
 

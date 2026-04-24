@@ -74,10 +74,11 @@ const ensureFiveAlternativas = (alternativas: Question['alternativas']): Questio
   return labels.map((label, idx) => {
     const source = alternativas[idx] as any;
     const texto = String(source?.texto || '').trim();
+    const safeTexto = texto.length >= 2 ? texto : `Opcao ${label}`;
     return {
       id: String(source?.id || source?.label || label),
       label,
-      texto: texto || `Opcao ${label}`
+      texto: safeTexto
     };
   });
 };
