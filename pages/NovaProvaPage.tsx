@@ -7,7 +7,7 @@ import { useGeminiConfig } from '../context/GeminiConfigContext';
 import { generateExamWithOpenAI } from '../services/openaiService';
 import { storageService } from '../services/storageService';
 import { extractTextFromImage } from '../services/ocrService';
-import { activateFreeOnce, cancelAccount, cancelCheckout, createCheckout, fetchBillingMode, fetchPlans } from '../services/authService';
+import { activateFreeOnce, cancelAccount, cancelCheckout, createCheckout, fetchAccountStatus, fetchBillingMode, fetchPlans } from '../services/authService';
 import { Button } from '../components/ui/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { BrainCircuit, Target, FileText, AlertTriangle } from 'lucide-react';
@@ -105,9 +105,20 @@ export const NovaProvaPage: React.FC = () => {
       setError('Sessao invalida. Faca login novamente.');
       return;
     }
-    if (accountStatus && !accountStatus.canGenerate) {
-      setError(`Conta bloqueada para geracao. Motivos: ${accountStatus.blockReasons.join(' | ')}`);
-      return;
+
+    try {
+      const liveStatus = await fetchAccountStatus(authToken);
+      if (!liveStatus.canGenerate) {
+        setError(`Conta bloqueada para geracao. Motivos: ${liveStatus.blockReasons.join(' | ')}`);
+        await refreshAccountStatus();
+        return;
+      }
+    } catch (err: any) {
+      if (isSessionError(err?.message)) {
+        await forceRelogin();
+        return;
+      }
+      // Se a consulta de status falhar, segue para tentativa de geracao e usa erro da API.
     }
 
     setIsLoading(true);

@@ -157,6 +157,9 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
     if (!contentType.includes('application/json')) {
       throw new Error(`Servidor retornou ${response.status} em formato nao-JSON. Detalhes: ${nonJsonBody.slice(0, 120)}...`);
     }
+    if (Array.isArray(data?.reasons) && data.reasons.length > 0) {
+      throw new Error(`${data?.error || 'Conta sem permissao para gerar conteudo.'} Motivos: ${data.reasons.join(' | ')}`);
+    }
     throw new Error(data?.error || data?.details || 'Erro desconhecido ao gerar a prova com OpenAI.');
   }
 
