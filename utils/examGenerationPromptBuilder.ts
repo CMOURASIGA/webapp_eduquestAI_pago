@@ -1,4 +1,4 @@
-﻿import { SerieEscolar } from '../types/exam';
+import { SerieEscolar } from '../types/exam';
 import { serieLabels, getAgeRange } from './seriesUtils';
 import { QUESTIONS_PER_EXAM } from './examConfig';
 
@@ -13,6 +13,34 @@ interface PromptParams {
   questionOffset?: number;
 }
 
+function normalizeText(value: string) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function detectOutputLanguage(disciplina: string) {
+  const normalized = normalizeText(disciplina);
+  const isEnglishDiscipline = /english|ingl/.test(normalized);
+
+  if (isEnglishDiscipline) {
+    return {
+      code: 'en-US',
+      label: 'English (US)',
+      guidance:
+        'Idioma obrigatorio de saida: English (US). Escreva enunciado, alternativas e explicacao totalmente em ingles. Nao traduza para portugues.',
+    };
+  }
+
+  return {
+    code: 'pt-BR',
+    label: 'Portugues (Brasil)',
+    guidance:
+      'Idioma obrigatorio de saida: Portugues (Brasil). Escreva enunciado, alternativas e explicacao totalmente em portugues.',
+  };
+}
+
 export const buildExamGenerationPrompt = (params: PromptParams): string => {
   const { serie, disciplina, objetivo, conteudoBase, nivelDificuldade } = params;
   const label = serieLabels[serie];
@@ -21,11 +49,15 @@ export const buildExamGenerationPrompt = (params: PromptParams): string => {
   const questionOffset = params.questionOffset ?? 0;
   const startNumber = questionOffset + 1;
   const endNumber = questionOffset + questionsToGenerate;
+  const outputLanguage = detectOutputLanguage(disciplina);
 
   return `Aja como um professor especialista brasileiro criando uma prova de ESTUDO para alunos do ${label} (faixa etaria aproximada: ${age}).
 A disciplina e "${disciplina}".
 O objetivo pedagogico e: "${objetivo}".
 Nivel de dificuldade desejado: ${nivelDificuldade}.
+Codigo do idioma de saida: ${outputLanguage.code}.
+Nome do idioma de saida: ${outputLanguage.label}.
+${outputLanguage.guidance}
 
 USE O SEGUINTE CONTEUDO BASE COMO REFERENCIA PRINCIPAL:
 ---
@@ -72,6 +104,7 @@ INSTRUCOES IMPORTANTES:
 }
 13. Garanta que cada questao tenha um ID unico.
 14. A explicacao deve: (a) justificar claramente por que a alternativa correta e correta; (b) apontar por que cada alternativa incorreta esta errada; (c) usar linguagem e exemplos adequados para a serie escolar.
+15. Validacao final de idioma: antes de responder, confirme que TODOS os campos textuais ("enunciado", "alternativas[].texto" e "explicacao") estao no idioma obrigatorio de saida definido acima.
 
 Sua resposta deve ser estritamente um objeto JSON contendo uma lista de 'questions'.`;
 };
