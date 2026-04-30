@@ -150,10 +150,6 @@ app.post("/api/openai/test", requireAuth, async (_req: AuthenticatedRequest, res
   }
 });
 
-app.post("/api/gemini/test", requireAuth, async (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: "Gemini desabilitado. Este sistema utiliza apenas OpenAI para geracao de provas." });
-});
-
 app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: AuthenticatedRequest, res) => {
   console.log("Recebida requisicao para /api/openai/generate");
   try {
@@ -181,7 +177,7 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
       model: modelName || "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.3,
     });
 
     appendLog({
@@ -223,10 +219,6 @@ app.post("/api/openai/generate", requireAuth, requireCanGenerate, async (req: Au
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined
     });
   }
-});
-
-app.post("/api/gemini/generate", requireAuth, requireCanGenerate, async (req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: "Gemini desabilitado. Este sistema utiliza apenas OpenAI para geracao de provas." });
 });
 
 app.post("/api/extract-text-image", upload.single("image"), async (req: any, res) => {

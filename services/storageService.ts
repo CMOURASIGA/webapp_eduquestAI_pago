@@ -1,9 +1,7 @@
 
 import { Exam } from '../types/exam';
-import { GeminiConfig } from '../types/settings';
 
 const EXAMS_KEY = 'eduquest-exams';
-const CONFIG_KEY = 'eduquest-gemini-config';
 const RECENT_NAMES_KEY = 'eduquest-recent-names';
 
 export const storageService = {
@@ -30,15 +28,6 @@ export const storageService = {
   deleteExam: (id: string): void => {
     const exams = storageService.getExams().filter(e => e.id !== id);
     localStorage.setItem(EXAMS_KEY, JSON.stringify(exams));
-  },
-
-  saveGeminiConfig: (config: GeminiConfig): void => {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-  },
-
-  getGeminiConfig: (): GeminiConfig | null => {
-    const data = localStorage.getItem(CONFIG_KEY);
-    return data ? JSON.parse(data) : null;
   },
 
   getRecentNames: (): string[] => {

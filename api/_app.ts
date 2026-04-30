@@ -100,7 +100,7 @@ app.post("/api/openai/generate", async (req, res) => {
       model: modelName || "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.3,
     });
 
     console.log("Resposta recebida da OpenAI com sucesso");
@@ -158,4 +158,3 @@ export async function startServer() {
     });
   }
 }
-

@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+.push_tmp
+.git_new
+repo_git
+_write_test.tmp
 
 # Editor directories and files
 .vscode/*

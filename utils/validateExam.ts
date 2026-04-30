@@ -1,6 +1,25 @@
 ﻿import { Exam } from '../types/exam';
 import { QUESTIONS_PER_EXAM } from './examConfig';
 
+const EXPECTED_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
+type ExpectedLabel = typeof EXPECTED_LABELS[number];
+
+function normalizeAlternativeLetter(raw: unknown): ExpectedLabel | '' {
+  const requested = String(raw || '').trim().toUpperCase();
+  if (!requested) return '';
+
+  // Mantem apenas A-E ou 1-5 (formatos comuns: "(A)", "LETRA A", "A)", "1", etc.)
+  const cleaned = requested.replace(/[^A-E1-5]/g, '');
+  if (!cleaned || cleaned.length !== 1) return '';
+
+  if (cleaned >= '1' && cleaned <= '5') {
+    const num = Number(cleaned);
+    return EXPECTED_LABELS[num - 1] || '';
+  }
+
+  return (EXPECTED_LABELS as readonly string[]).includes(cleaned) ? (cleaned as ExpectedLabel) : '';
+}
+
 // Validacao para garantir consistencia estrutural e pedagogica minima da prova.
 export function validateExam(exam: Pick<Exam, 'questions'>) {
   if (!exam.questions || exam.questions.length !== QUESTIONS_PER_EXAM) {
@@ -8,7 +27,7 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
   }
 
   exam.questions.forEach((q, idx) => {
-    const expectedLabels = ['A', 'B', 'C', 'D', 'E'];
+    const expectedLabels = [...EXPECTED_LABELS];
 
     if (!q.enunciado || q.enunciado.trim().length < 15) {
       throw new Error(`Questao ${idx + 1} invalida: enunciado insuficiente.`);
@@ -24,26 +43,31 @@ export function validateExam(exam: Pick<Exam, 'questions'>) {
       label: String(a.label || '').trim().toUpperCase(),
       texto: String(a.texto || '').trim()
     }));
-    const requestedCorreta = String(q.alternativaCorretaId || '').trim();
+    const requestedCorretaRaw = q.alternativaCorretaId;
+    const requestedCorreta = normalizeAlternativeLetter(requestedCorretaRaw);
+    if (!requestedCorreta) {
+      throw new Error(
+        `Questao ${idx + 1} invalida: alternativaCorretaId "${String(requestedCorretaRaw || '').trim()}" nao mapeavel para nenhuma das alternativas (A-E).`
+      );
+    }
+
+    const oldByLabel = new Map<ExpectedLabel, { id: string; label: string; texto: string }>();
+    oldAlternativas.forEach((alt) => {
+      const normalized = normalizeAlternativeLetter(alt.label || alt.id);
+      if (normalized && !oldByLabel.has(normalized)) oldByLabel.set(normalized, alt);
+    });
+
     q.alternativas = expectedLabels.map((label, altIdx) => {
-      const src = oldAlternativas[altIdx] || { id: '', label: '', texto: '' };
+      const src = oldByLabel.get(label as ExpectedLabel) || oldAlternativas[altIdx] || { id: '', label: '', texto: '' };
       const safeTexto = src.texto && src.texto.trim().length >= 2 ? src.texto.trim() : `Opcao ${label}`;
       return {
-        ...q.alternativas[altIdx],
         id: label,
         label,
         texto: safeTexto
       };
     });
-
-    const indexByOriginalId = oldAlternativas.findIndex((a) => a.id && a.id === requestedCorreta);
-    const indexByOriginalLabel = oldAlternativas.findIndex((a) => a.label && a.label === requestedCorreta.toUpperCase());
-    const indexByRequestedLabel = expectedLabels.indexOf(requestedCorreta.toUpperCase());
-    const chosenIndex =
-      indexByOriginalId >= 0 ? indexByOriginalId :
-      indexByOriginalLabel >= 0 ? indexByOriginalLabel :
-      indexByRequestedLabel >= 0 ? indexByRequestedLabel : 0;
-    q.alternativaCorretaId = expectedLabels[chosenIndex];
+    // Sem fallback silencioso: se nao for mapeavel para A-E, a questao e invalida (forca regeneracao).
+    q.alternativaCorretaId = requestedCorreta;
 
     const optionIds = q.alternativas.map((a) => (a.id || '').toString().trim());
     const optionLabels = q.alternativas.map((a) => (a.label || '').toString().trim().toUpperCase());

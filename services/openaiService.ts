@@ -71,29 +71,32 @@ const normalizeAlternativas = (alts: any): Question['alternativas'] => {
 
 const ensureFiveAlternativas = (alternativas: Question['alternativas']): Question['alternativas'] => {
   const labels = ['A', 'B', 'C', 'D', 'E'];
+  const normalizeLetter = (raw: unknown) => {
+    const cleaned = String(raw || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-E1-5]/g, '');
+    if (!cleaned || cleaned.length !== 1) return '';
+    if (cleaned >= '1' && cleaned <= '5') return labels[Number(cleaned) - 1] || '';
+    return labels.includes(cleaned) ? cleaned : '';
+  };
+
+  const byLetter = new Map<string, any>();
+  alternativas.forEach((alt: any) => {
+    const letter = normalizeLetter(alt?.label) || normalizeLetter(alt?.id);
+    if (letter && !byLetter.has(letter)) byLetter.set(letter, alt);
+  });
+
   return labels.map((label, idx) => {
-    const source = alternativas[idx] as any;
+    const source = (byLetter.get(label) || (alternativas[idx] as any) || {}) as any;
     const texto = String(source?.texto || '').trim();
     const safeTexto = texto.length >= 2 ? texto : `Opcao ${label}`;
     return {
-      id: String(source?.id || source?.label || label),
+      id: label,
       label,
       texto: safeTexto
     };
   });
-};
-
-const resolveCorretaId = (
-  alternativaCorretaIdRaw: any,
-  alternativas: Question['alternativas']
-) => {
-  const requested = String(alternativaCorretaIdRaw || '').trim();
-  if (!requested) return alternativas[0]?.id || 'A';
-  const byId = alternativas.find((a) => a.id === requested);
-  if (byId) return byId.id;
-  const byLabel = alternativas.find((a) => String(a.label || '').toUpperCase() === requested.toUpperCase());
-  if (byLabel) return byLabel.id;
-  return alternativas[0]?.id || 'A';
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,8 +113,29 @@ function parseRetryAfterMs(headerValue: string | null) {
   return 0;
 }
 
-async function callOpenAIBatch(params: GenerateParams, offset: number, count: number): Promise<Question[]> {
-  const prompt = buildExamGenerationPrompt({ ...params, questionsCount: count, questionOffset: offset });
+function summarizePreviousQuestions(questions: Question[]) {
+  return (questions || [])
+    .map((q, i) => {
+      const text = String(q?.enunciado || '').replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      return `Q${i + 1}: ${text.slice(0, 90)}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function callOpenAIBatch(
+  params: GenerateParams,
+  offset: number,
+  count: number,
+  previousQuestionsSummary?: string
+): Promise<Question[]> {
+  const prompt = buildExamGenerationPrompt({
+    ...params,
+    questionsCount: count,
+    questionOffset: offset,
+    previousQuestionsSummary
+  });
   const maxAttempts = 5;
   let data: any = null;
 
@@ -182,17 +206,15 @@ async function callOpenAIBatch(params: GenerateParams, offset: number, count: nu
       (q as any).alternativaCorretaId ||
       (q as any).alternativa_correta_id ||
       (q as any).corretaId;
-    const alternativaCorretaId = resolveCorretaId(alternativaCorretaIdRaw, alternativas);
-
-    if (!q.enunciado || alternativas.length < 2 || !alternativaCorretaId) {
-      throw new Error(`A IA retornou uma questao incompleta (questao ${idx + 1 + offset}). Tente gerar novamente.`);
-    }
+    const alternativaCorretaId = String(alternativaCorretaIdRaw || '').trim();
 
     return {
       ...q,
       id: q.id || crypto.randomUUID(),
+      enunciado: String((q as any).enunciado || '').trim(),
       alternativas,
       alternativaCorretaId,
+      explicacao: String((q as any).explicacao || '').trim(),
     };
   });
 
@@ -251,7 +273,8 @@ export async function generateExamWithOpenAI(params: GenerateParams): Promise<Pa
 
     const allQuestions: Question[] = [];
     for (const b of batches) {
-      const questions = await callOpenAIBatch(params, b.offset, b.count);
+      const previousSummary = summarizePreviousQuestions(allQuestions);
+      const questions = await callOpenAIBatch(params, b.offset, b.count, previousSummary);
       allQuestions.push(...questions);
     }
 
